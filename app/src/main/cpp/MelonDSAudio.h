@@ -12,6 +12,8 @@ namespace MelonDSAndroid
     extern void enableMic();
     extern void disableMic();
     extern int readMic(melonDS::s16* data, int maxlength);
+    extern melonDS::AudioOutputMetrics getAudioOutputMetrics();
+    extern melonDS::AudioOutputMetrics resetAudioOutputMetrics();
 
     extern void setupAudio(AudioSettings audioSettings);
     extern void updateAudioSettings(AudioSettings audioSettings);

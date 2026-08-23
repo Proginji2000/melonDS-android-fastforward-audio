@@ -2,9 +2,14 @@
 #include "MicInputOboeCallback.h"
 #include "mic_blow.h"
 #include "OboeCallback.h"
+#include "MelonLog.h"
 #include <oboe/Oboe.h>
+#include <algorithm>
 
 #define MIC_BUFFER_SIZE 2048
+
+constexpr char FF_AUDIO_DIAG_TAG[] = "FFAudioDiag";
+constexpr float INTERNAL_FRAME_RATE = 59.8260982880808f;
 
 std::weak_ptr<MelonDSAndroid::MelonInstance> activeInstance;
 
@@ -63,13 +68,44 @@ namespace MelonDSAndroid
         streamBuilder.setErrorCallback(stabilizedOutputCallback);
 
         oboe::Result result = streamBuilder.openStream(audioStream);
-        audioStream->setPerformanceHintEnabled(true);
-        audioStream->setBufferSizeInFrames(std::min(audioStream->getBufferCapacityInFrames(), 2048));
-        if (result != oboe::Result::OK) {
-            Log(Error, "Failed to init audio stream");
+        if (result != oboe::Result::OK || !audioStream) {
+            LOG_ERROR(FF_AUDIO_DIAG_TAG, "open_failed result=%s stream_valid=%s",
+                      oboe::convertToText(result), audioStream ? "true" : "false");
+            if (audioStream)
+                audioStream->close();
+            audioStream = nullptr;
             outputCallback = nullptr;
             stabilizedOutputCallback = nullptr;
+            return;
         }
+
+        audioStream->setPerformanceHintEnabled(true);
+        auto bufferSizeResult = audioStream->setBufferSizeInFrames(
+                std::min(audioStream->getBufferCapacityInFrames(), 2048));
+        if (!bufferSizeResult) {
+            LOG_WARN(FF_AUDIO_DIAG_TAG, "buffer_size_failed result=%s",
+                     oboe::convertToText(bufferSizeResult.error()));
+        }
+
+        LOG_INFO(FF_AUDIO_DIAG_TAG,
+                 "open_success api=%s sample_rate=%d format=%s channels=%d "
+                 "frames_per_burst=%d frames_per_callback=%d buffer_capacity_frames=%d "
+                 "buffer_size_frames=%d performance_mode=%s sharing_mode=%s direction=%s "
+                 "usage=%s content_type=%s device_id=%d session_id=%s performance_hint=%s "
+                 "format_conversion=%s src_quality=%s",
+                 oboe::convertToText(audioStream->getAudioApi()), audioStream->getSampleRate(),
+                 oboe::convertToText(audioStream->getFormat()), audioStream->getChannelCount(),
+                 audioStream->getFramesPerBurst(), audioStream->getFramesPerDataCallback(),
+                 audioStream->getBufferCapacityInFrames(), audioStream->getBufferSizeInFrames(),
+                 oboe::convertToText(audioStream->getPerformanceMode()),
+                 oboe::convertToText(audioStream->getSharingMode()),
+                 oboe::convertToText(audioStream->getDirection()),
+                 oboe::convertToText(audioStream->getUsage()),
+                 oboe::convertToText(audioStream->getContentType()), audioStream->getDeviceId(),
+                 oboe::convertToText(audioStream->getSessionId()),
+                 audioStream->isPerformanceHintEnabled() ? "true" : "false",
+                 audioStream->isFormatConversionAllowed() ? "true" : "false",
+                 oboe::convertToText(audioStream->getSampleRateConversionQuality()));
     }
 
     void cleanupAudioOutputStream()
@@ -281,9 +317,23 @@ namespace MelonDSAndroid
 
     void setAudioActiveInstance(std::shared_ptr<MelonInstance> instance)
     {
+        const double skew = std::clamp(60.0 / INTERNAL_FRAME_RATE, 0.995, 1.005);
+        instance->setAudioOutputSkew(skew);
         activeInstance = instance;
         if (outputCallback)
             outputCallback->activeInstance = activeInstance;
+    }
+
+    AudioOutputMetrics getAudioOutputMetrics()
+    {
+        auto instance = activeInstance.lock();
+        return instance ? instance->getAudioOutputMetrics() : AudioOutputMetrics{};
+    }
+
+    AudioOutputMetrics resetAudioOutputMetrics()
+    {
+        auto instance = activeInstance.lock();
+        return instance ? instance->resetAudioOutputMetrics() : AudioOutputMetrics{};
     }
 
     void cleanupAudio()

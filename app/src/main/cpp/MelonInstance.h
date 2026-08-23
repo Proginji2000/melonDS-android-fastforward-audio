@@ -43,6 +43,8 @@ public:
     void pressKey(u32 key);
     void releaseKey(u32 key);
     int readAudioOutput(s16* buffer, int length);
+    AudioOutputMetrics getAudioOutputMetrics();
+    AudioOutputMetrics resetAudioOutputMetrics();
     void setAudioOutputSkew(double skew);
     bool takeScreenshot();
     void loadCheats(std::list<Cheat> cheats);

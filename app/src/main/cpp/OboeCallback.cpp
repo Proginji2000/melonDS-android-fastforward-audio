@@ -1,11 +1,8 @@
 #include "OboeCallback.h"
 #include "types.h"
 #include "Platform.h"
-#include "SPU.h"
 
 using namespace melonDS;
-
-#define INTERNAL_FRAME_RATE 59.8260982880808f
 
 OboeCallback::OboeCallback(int volume, void (*onErrorCallback)(void), std::ostream* recordingStream) : _volume(volume), onErrorCallback(onErrorCallback), _recordingStream(recordingStream) {
     audioSampleFrac = 0;
@@ -22,9 +19,6 @@ OboeCallback::onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t n
     }
 
     int len = numFrames;
-
-    double skew = std::clamp(60.0 / INTERNAL_FRAME_RATE, 0.995, 1.005);
-    currentInstance->setAudioOutputSkew(skew);
 
     int len_in = getNumSamplesOut(len);
     if (len_in > numFrames) len_in = numFrames;
