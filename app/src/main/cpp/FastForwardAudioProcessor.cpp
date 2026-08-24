@@ -11,7 +11,15 @@ FastForwardAudioProcessor::FastForwardAudioProcessor()
     SoundTouch.setChannels(Channels);
     SoundTouch.setRate(1.0);
     SoundTouch.setPitch(1.0);
-    SoundTouch.setTempo(2.0);
+    ConfigureTempo(Tempo);
+}
+
+void FastForwardAudioProcessor::ConfigureTempo(int tempo)
+{
+    SoundTouch.clear();
+    SoundTouch.setTempo(tempo);
+    Tempo = tempo;
+    OutputPhase = 0;
 }
 
 void FastForwardAudioProcessor::ResetStream()
@@ -38,8 +46,8 @@ melonDS::AudioOutputProcessorResult FastForwardAudioProcessor::Process(
     if (frames <= 0)
         return result;
 
-    const int pacedOutputFrames = (frames + OutputPhase) / 2;
-    OutputPhase = (frames + OutputPhase) & 1;
+    const int pacedOutputFrames = (frames + OutputPhase) / Tempo;
+    OutputPhase = (frames + OutputPhase) % Tempo;
 
     FloatInput.resize(frames * Channels);
     FloatOutput.resize(pacedOutputFrames * Channels);

@@ -27,7 +27,7 @@ MelonDSAndroid::AudioSettings currentAudioSettings;
 std::mutex micBufferMutex;
 std::mutex fastForwardAudioMutex;
 std::unique_ptr<MelonDSAndroid::FastForwardAudioProcessor> fastForwardAudioProcessor;
-bool fastForwardAudioX2Enabled = false;
+bool fastForwardAudioEnabled = false;
 bool fastForwardAudioNeedsResume = false;
 int actualMicSource = 0;
 bool isMicInputEnabled = true;
@@ -352,7 +352,7 @@ namespace MelonDSAndroid
         return instance ? instance->resetAudioOutputMetrics() : AudioOutputMetrics{};
     }
 
-    void setFastForwardAudioX2Enabled(bool enabled)
+    void setFastForwardAudioTempo(int tempo)
     {
         std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
         auto instance = activeInstance.lock();
@@ -360,19 +360,22 @@ namespace MelonDSAndroid
             return;
 
         const auto start = std::chrono::steady_clock::now();
-        if (enabled)
+        if (tempo > 0)
         {
-            fastForwardAudioProcessor->ResetStream();
+            if (fastForwardAudioEnabled)
+                instance->setAudioOutputProcessor(&discardAudioOutput, nullptr);
+            fastForwardAudioProcessor->ConfigureTempo(tempo);
             instance->setAudioOutputProcessor(
                     &FastForwardAudioProcessor::ProcessCallback,
                     fastForwardAudioProcessor.get());
-            fastForwardAudioX2Enabled = true;
+            fastForwardAudioEnabled = true;
             fastForwardAudioNeedsResume = false;
             const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - start).count();
             LOG_INFO(FF_AUDIO_DIAG_TAG,
-                     "dsp_transition enabled=true backend=soundtouch tempo=2.000 pitch=1.000 "
+                     "dsp_transition enabled=true backend=soundtouch tempo=%d.000 pitch=1.000 "
                      "transition_us=%lld configured_initial_latency_frames=%d",
+                     tempo,
                      static_cast<long long>(transitionUs),
                      fastForwardAudioProcessor->GetConfiguredInitialLatencyFrames());
             return;
@@ -380,7 +383,7 @@ namespace MelonDSAndroid
 
         instance->setAudioOutputProcessor(nullptr, nullptr);
         fastForwardAudioProcessor->ResetStream();
-        fastForwardAudioX2Enabled = false;
+        fastForwardAudioEnabled = false;
         fastForwardAudioNeedsResume = false;
         const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - start).count();
@@ -393,7 +396,7 @@ namespace MelonDSAndroid
     {
         std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
         auto instance = activeInstance.lock();
-        if (!instance || !fastForwardAudioProcessor || !fastForwardAudioX2Enabled)
+        if (!instance || !fastForwardAudioProcessor || !fastForwardAudioEnabled)
             return;
 
         const auto start = std::chrono::steady_clock::now();
@@ -412,7 +415,7 @@ namespace MelonDSAndroid
         std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
         auto instance = activeInstance.lock();
         if (!fastForwardAudioNeedsResume || !instance || !fastForwardAudioProcessor ||
-            !fastForwardAudioX2Enabled)
+            !fastForwardAudioEnabled)
             return;
 
         const auto start = std::chrono::steady_clock::now();
@@ -428,12 +431,12 @@ namespace MelonDSAndroid
 
     void cleanupAudio()
     {
-        if (fastForwardAudioProcessor && fastForwardAudioX2Enabled)
-            setFastForwardAudioX2Enabled(false);
+        if (fastForwardAudioProcessor && fastForwardAudioEnabled)
+            setFastForwardAudioTempo(0);
         cleanupAudioOutputStream();
         cleanupMicInputStream();
         fastForwardAudioProcessor.reset();
-        fastForwardAudioX2Enabled = false;
+        fastForwardAudioEnabled = false;
         fastForwardAudioNeedsResume = false;
     }
 

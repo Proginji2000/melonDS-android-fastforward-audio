@@ -66,9 +66,13 @@ constexpr FastForwardState buildFastForwardState(bool enabled, float multiplier)
     };
 }
 
-constexpr bool dspEnabledForCurrentFastForward(const FastForwardState& state)
+constexpr int dspTempoForCurrentFastForward(const FastForwardState& state)
 {
-    return state.enabled && state.multiplier == 2.0f;
+    if (!state.enabled)
+        return 0;
+    return state.multiplier == 2.0f || state.multiplier == 3.0f || state.multiplier == 4.0f
+           ? static_cast<int>(state.multiplier)
+           : 0;
 }
 
 static_assert(buildFastForwardState(false, 4.0f).targetFps == 60);
@@ -76,9 +80,12 @@ static_assert(buildFastForwardState(false, 4.0f).limitFps);
 static_assert(buildFastForwardState(true, 2.0f).targetFps == 120);
 static_assert(buildFastForwardState(true, 2.0f).limitFps);
 static_assert(!buildFastForwardState(true, -1.0f).limitFps);
-static_assert(dspEnabledForCurrentFastForward(buildFastForwardState(true, 2.0f)));
-static_assert(!dspEnabledForCurrentFastForward(buildFastForwardState(false, 2.0f)));
-static_assert(!dspEnabledForCurrentFastForward(buildFastForwardState(true, 4.0f)));
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(true, 2.0f)) == 2);
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(true, 3.0f)) == 3);
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(true, 4.0f)) == 4);
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(false, 2.0f)) == 0);
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(true, 1.5f)) == 0);
+static_assert(dspTempoForCurrentFastForward(buildFastForwardState(true, -1.0f)) == 0);
 
 std::mutex fastForwardStateMutex;
 FastForwardState fastForwardState = buildFastForwardState(false, 1.0f);
@@ -602,8 +609,8 @@ Java_me_magnum_melonds_MelonEmulator_setFastForwardEnabled(JNIEnv* env, jobject 
         newState = buildFastForwardState(requestedEnabled, fastForwardState.multiplier);
         fastForwardState = newState;
         loggedState = requestedEnabled ? newState : previousState;
-        didDspTransition = dspEnabledForCurrentFastForward(previousState) !=
-                           dspEnabledForCurrentFastForward(newState);
+        didDspTransition = dspTempoForCurrentFastForward(previousState) !=
+                           dspTempoForCurrentFastForward(newState);
         updatePerformanceHintTargetLocked(newState);
     }
 
@@ -612,8 +619,8 @@ Java_me_magnum_melonds_MelonEmulator_setFastForwardEnabled(JNIEnv* env, jobject 
         if (requestedEnabled)
             MelonDSAndroid::resetAudioOutputMetrics();
         if (didDspTransition)
-            MelonDSAndroid::setFastForwardAudioX2Enabled(
-                    dspEnabledForCurrentFastForward(newState));
+            MelonDSAndroid::setFastForwardAudioTempo(
+                    dspTempoForCurrentFastForward(newState));
         metrics = MelonDSAndroid::getAudioOutputMetrics();
         logFastForwardTransition(requestedEnabled ? "OFF_TO_ON" : "ON_TO_OFF", loggedState, metrics);
     }
@@ -646,15 +653,18 @@ Java_me_magnum_melonds_MelonEmulator_updateEmulatorConfiguration(JNIEnv* env, jo
         updatePerformanceHintTargetLocked(newState);
     }
 
-    const bool oldDspEnabled = dspEnabledForCurrentFastForward(previousState);
-    const bool newDspEnabled = dspEnabledForCurrentFastForward(newState);
-    if (oldDspEnabled != newDspEnabled)
+    const int oldDspTempo = dspTempoForCurrentFastForward(previousState);
+    const int newDspTempo = dspTempoForCurrentFastForward(newState);
+    if (oldDspTempo != newDspTempo)
     {
-        if (newDspEnabled)
+        if (newDspTempo > 0)
             MelonDSAndroid::resetAudioOutputMetrics();
-        MelonDSAndroid::setFastForwardAudioX2Enabled(newDspEnabled);
-        logFastForwardTransition(newDspEnabled ? "DSP_X2_ON_CONFIG" : "DSP_X2_OFF_CONFIG",
-                                 newDspEnabled ? newState : previousState,
+        MelonDSAndroid::setFastForwardAudioTempo(newDspTempo);
+        const char* transition = oldDspTempo == 0 ? "DSP_ON_CONFIG" :
+                                 newDspTempo == 0 ? "DSP_OFF_CONFIG" :
+                                                    "DSP_TEMPO_CONFIG";
+        logFastForwardTransition(transition,
+                                 newDspTempo > 0 ? newState : previousState,
                                  MelonDSAndroid::getAudioOutputMetrics());
     }
 }

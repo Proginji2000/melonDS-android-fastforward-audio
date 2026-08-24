@@ -12,6 +12,7 @@ class FastForwardAudioProcessor
 {
 public:
     FastForwardAudioProcessor();
+    void ConfigureTempo(int tempo);
     void ResetStream();
 
     int GetConfiguredInitialLatencyFrames() const;
@@ -26,6 +27,7 @@ private:
     static constexpr int Channels = 2;
 
     soundtouch::SoundTouch SoundTouch;
+    int Tempo = 2;
     int OutputPhase = 0;
     std::vector<float> FloatInput;
     std::vector<float> FloatOutput;
