@@ -14,6 +14,11 @@ set(OBOE ${ANDROID-CPP}/oboe)
 set(FAAD2 ${ANDROID-CPP}/faad2)
 set(RCHEEVOS ${ANDROID-CPP}/rcheevos)
 
+if(ANDROID)
+    string(REPLACE "-O2" "-O3" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+    string(REPLACE "-O2" "-O3" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+endif()
+
 add_subdirectory(${CORE-LIB} ./melonDS-android-lib)
 add_subdirectory(${OBOE} ./oboe)
 add_subdirectory(${FAAD2} ./faad2)
@@ -71,3 +76,9 @@ target_include_directories(melonDS-android-frontend PUBLIC
         ${RCHEEVOS}/include
 )
 target_link_libraries(melonDS-android-frontend android core net-utils oboe faad enet rcheevos EGL GLESv3)
+
+if(ANDROID)
+    target_compile_options(core PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
+    target_compile_options(melonDS-android-frontend PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
+    target_link_options(melonDS-android-frontend PRIVATE "$<$<CONFIG:RelWithDebInfo>:-flto=thin>")
+endif()
