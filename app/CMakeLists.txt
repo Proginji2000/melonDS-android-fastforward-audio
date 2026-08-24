@@ -13,6 +13,7 @@ set(CORE-LIB ../melonDS-android-lib)
 set(OBOE ${ANDROID-CPP}/oboe)
 set(FAAD2 ${ANDROID-CPP}/faad2)
 set(RCHEEVOS ${ANDROID-CPP}/rcheevos)
+set(SOUNDTOUCH ${ANDROID-CPP}/third_party/soundtouch)
 
 if(ANDROID)
     string(REPLACE "-O2" "-O3" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
@@ -28,6 +29,30 @@ target_include_directories(enet INTERFACE ${ANDROID-CPP}/enet/include)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${CORE-LIB}/cmake")
 add_subdirectory(${CORE-LIB}/src/net ./net-utils)
 
+add_library(soundtouch STATIC
+        ${SOUNDTOUCH}/source/SoundTouch/AAFilter.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/cpu_detect_x86.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/FIFOSampleBuffer.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/FIRFilter.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/InterpolateCubic.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/InterpolateLinear.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/InterpolateShannon.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/mmx_optimized.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/RateTransposer.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/SoundTouch.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/sse_optimized.cpp
+        ${SOUNDTOUCH}/source/SoundTouch/TDStretch.cpp)
+target_include_directories(soundtouch PUBLIC ${SOUNDTOUCH}/include)
+target_compile_definitions(soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES)
+target_compile_options(soundtouch PRIVATE -ffast-math)
+
+if(ANDROID AND ANDROID_ABI MATCHES "^(armeabi-v7a|arm64-v8a)$")
+    target_compile_definitions(soundtouch PRIVATE SOUNDTOUCH_USE_NEON)
+    if(ANDROID_ABI STREQUAL "armeabi-v7a")
+        target_compile_options(soundtouch PRIVATE -mfpu=neon)
+    endif()
+endif()
+
 add_library(
         melonDS-android-frontend
 
@@ -38,6 +63,7 @@ add_library(
         ${ANDROID-CPP}/DSiSupport.cpp
         ${ANDROID-CPP}/EmulatorArgsBuilder.cpp
         ${ANDROID-CPP}/EmulatorMessageQueueJNI.cpp
+        ${ANDROID-CPP}/FastForwardAudioProcessor.cpp
         ${ANDROID-CPP}/JniEnvHandler.cpp
         ${ANDROID-CPP}/MelonDS.cpp
         ${ANDROID-CPP}/MelonDSAndroidCameraHandler.cpp
@@ -75,10 +101,11 @@ target_include_directories(melonDS-android-frontend PUBLIC
         ${FAAD2}/include
         ${RCHEEVOS}/include
 )
-target_link_libraries(melonDS-android-frontend android core net-utils oboe faad enet rcheevos EGL GLESv3)
+target_link_libraries(melonDS-android-frontend android core net-utils oboe faad enet rcheevos soundtouch EGL GLESv3)
 
 if(ANDROID)
     target_compile_options(core PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
+    target_compile_options(soundtouch PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:CXX>>:-flto=thin>")
     target_compile_options(melonDS-android-frontend PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
     target_link_options(melonDS-android-frontend PRIVATE "$<$<CONFIG:RelWithDebInfo>:-flto=thin>")
 endif()

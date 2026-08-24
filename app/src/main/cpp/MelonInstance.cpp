@@ -459,6 +459,11 @@ AudioOutputMetrics MelonInstance::resetAudioOutputMetrics()
     return nds->SPU.ResetOutputMetrics();
 }
 
+void MelonInstance::setAudioOutputProcessor(AudioOutputProcessor processor, void* context)
+{
+    nds->SPU.SetOutputProcessor(processor, context);
+}
+
 void MelonInstance::setAudioOutputSkew(double skew)
 {
     nds->SPU.SetOutputSkew(skew);

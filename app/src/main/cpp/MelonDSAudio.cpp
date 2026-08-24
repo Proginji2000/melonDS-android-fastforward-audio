@@ -1,10 +1,13 @@
 #include "MelonDSAudio.h"
+#include "FastForwardAudioProcessor.h"
 #include "MicInputOboeCallback.h"
 #include "mic_blow.h"
 #include "OboeCallback.h"
 #include "MelonLog.h"
 #include <oboe/Oboe.h>
 #include <algorithm>
+#include <chrono>
+#include <memory>
 
 #define MIC_BUFFER_SIZE 2048
 
@@ -22,16 +25,26 @@ std::shared_ptr<MicInputOboeCallback> micInputCallback;
 
 MelonDSAndroid::AudioSettings currentAudioSettings;
 std::mutex micBufferMutex;
+std::mutex fastForwardAudioMutex;
+std::unique_ptr<MelonDSAndroid::FastForwardAudioProcessor> fastForwardAudioProcessor;
+bool fastForwardAudioX2Enabled = false;
+bool fastForwardAudioNeedsResume = false;
 int actualMicSource = 0;
 bool isMicInputEnabled = true;
 bool isMicOn = false;
 int micBufferReadPos = 0;
+
+static melonDS::AudioOutputProcessorResult discardAudioOutput(void*, melonDS::s16*, int)
+{
+    return {};
+}
 
 namespace MelonDSAndroid
 {
     // AUDIO OUTPUT
 
     void resetAudioOutputStream();
+    void resumeFastForwardAudioAfterPause();
 
     void setupAudioOutputStream(int audioLatency, int volume)
     {
@@ -124,11 +137,13 @@ namespace MelonDSAndroid
 
     void resetAudioOutputStream()
     {
+        resetFastForwardAudioForPause();
         cleanupAudioOutputStream();
         setupAudioOutputStream(currentAudioSettings.audioLatency, currentAudioSettings.volume);
         if (audioStream) {
             audioStream->requestStart();
         }
+        resumeFastForwardAudioAfterPause();
     }
 
     // MICROPHONE
@@ -279,6 +294,7 @@ namespace MelonDSAndroid
         isMicOn = false;
         actualMicSource = audioSettings.micSource;
         currentAudioSettings = audioSettings;
+        fastForwardAudioProcessor = std::make_unique<FastForwardAudioProcessor>();
 
         if (audioSettings.soundEnabled)
             setupAudioOutputStream(audioSettings.audioLatency, audioSettings.volume);
@@ -336,16 +352,97 @@ namespace MelonDSAndroid
         return instance ? instance->resetAudioOutputMetrics() : AudioOutputMetrics{};
     }
 
+    void setFastForwardAudioX2Enabled(bool enabled)
+    {
+        std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
+        auto instance = activeInstance.lock();
+        if (!instance || !fastForwardAudioProcessor)
+            return;
+
+        const auto start = std::chrono::steady_clock::now();
+        if (enabled)
+        {
+            fastForwardAudioProcessor->ResetStream();
+            instance->setAudioOutputProcessor(
+                    &FastForwardAudioProcessor::ProcessCallback,
+                    fastForwardAudioProcessor.get());
+            fastForwardAudioX2Enabled = true;
+            fastForwardAudioNeedsResume = false;
+            const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - start).count();
+            LOG_INFO(FF_AUDIO_DIAG_TAG,
+                     "dsp_transition enabled=true backend=soundtouch tempo=2.000 pitch=1.000 "
+                     "transition_us=%lld configured_initial_latency_frames=%d",
+                     static_cast<long long>(transitionUs),
+                     fastForwardAudioProcessor->GetConfiguredInitialLatencyFrames());
+            return;
+        }
+
+        instance->setAudioOutputProcessor(nullptr, nullptr);
+        fastForwardAudioProcessor->ResetStream();
+        fastForwardAudioX2Enabled = false;
+        fastForwardAudioNeedsResume = false;
+        const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start).count();
+        LOG_INFO(FF_AUDIO_DIAG_TAG,
+                 "dsp_transition enabled=false backend=soundtouch transition_us=%lld",
+                 static_cast<long long>(transitionUs));
+    }
+
+    void resetFastForwardAudioForPause()
+    {
+        std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
+        auto instance = activeInstance.lock();
+        if (!instance || !fastForwardAudioProcessor || !fastForwardAudioX2Enabled)
+            return;
+
+        const auto start = std::chrono::steady_clock::now();
+        instance->setAudioOutputProcessor(&discardAudioOutput, nullptr);
+        fastForwardAudioProcessor->ResetStream();
+        fastForwardAudioNeedsResume = true;
+        const auto resetUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start).count();
+        LOG_INFO(FF_AUDIO_DIAG_TAG,
+                 "dsp_stream_suspend reason=pause backend=soundtouch reset_us=%lld",
+                 static_cast<long long>(resetUs));
+    }
+
+    void resumeFastForwardAudioAfterPause()
+    {
+        std::lock_guard<std::mutex> lock(fastForwardAudioMutex);
+        auto instance = activeInstance.lock();
+        if (!fastForwardAudioNeedsResume || !instance || !fastForwardAudioProcessor ||
+            !fastForwardAudioX2Enabled)
+            return;
+
+        const auto start = std::chrono::steady_clock::now();
+        instance->setAudioOutputProcessor(
+                &FastForwardAudioProcessor::ProcessCallback,
+                fastForwardAudioProcessor.get());
+        fastForwardAudioNeedsResume = false;
+        const auto resumeUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start).count();
+        LOG_INFO(FF_AUDIO_DIAG_TAG, "dsp_stream_resume backend=soundtouch resume_us=%lld",
+                 static_cast<long long>(resumeUs));
+    }
+
     void cleanupAudio()
     {
+        if (fastForwardAudioProcessor && fastForwardAudioX2Enabled)
+            setFastForwardAudioX2Enabled(false);
         cleanupAudioOutputStream();
         cleanupMicInputStream();
+        fastForwardAudioProcessor.reset();
+        fastForwardAudioX2Enabled = false;
+        fastForwardAudioNeedsResume = false;
     }
 
     void startAudio()
     {
         if (audioStream)
             audioStream->requestStart();
+
+        resumeFastForwardAudioAfterPause();
 
         startMicStreamIfAllowed();
     }
@@ -357,5 +454,7 @@ namespace MelonDSAndroid
 
         if (micInputStream)
             micInputStream->requestStop();
+
+        resetFastForwardAudioForPause();
     }
 }

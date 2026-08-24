@@ -45,6 +45,7 @@ public:
     int readAudioOutput(s16* buffer, int length);
     AudioOutputMetrics getAudioOutputMetrics();
     AudioOutputMetrics resetAudioOutputMetrics();
+    void setAudioOutputProcessor(AudioOutputProcessor processor, void* context);
     void setAudioOutputSkew(double skew);
     bool takeScreenshot();
     void loadCheats(std::list<Cheat> cheats);

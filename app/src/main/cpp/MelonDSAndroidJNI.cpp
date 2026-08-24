@@ -66,11 +66,19 @@ constexpr FastForwardState buildFastForwardState(bool enabled, float multiplier)
     };
 }
 
+constexpr bool dspEnabledForCurrentFastForward(const FastForwardState& state)
+{
+    return state.enabled && state.multiplier == 2.0f;
+}
+
 static_assert(buildFastForwardState(false, 4.0f).targetFps == 60);
 static_assert(buildFastForwardState(false, 4.0f).limitFps);
 static_assert(buildFastForwardState(true, 2.0f).targetFps == 120);
 static_assert(buildFastForwardState(true, 2.0f).limitFps);
 static_assert(!buildFastForwardState(true, -1.0f).limitFps);
+static_assert(dspEnabledForCurrentFastForward(buildFastForwardState(true, 2.0f)));
+static_assert(!dspEnabledForCurrentFastForward(buildFastForwardState(false, 2.0f)));
+static_assert(!dspEnabledForCurrentFastForward(buildFastForwardState(true, 4.0f)));
 
 std::mutex fastForwardStateMutex;
 FastForwardState fastForwardState = buildFastForwardState(false, 1.0f);
@@ -105,12 +113,22 @@ void logFastForwardTransition(const char* transition, const FastForwardState& st
              "stereo_frames_produced=%" PRIu64 " stereo_frames_read=%" PRIu64 " "
              "stereo_frames_overwritten=%" PRIu64 " stereo_frames_requested=%" PRIu64 " "
              "fully_underfed_callbacks=%" PRIu64 " partially_underfed_callbacks=%" PRIu64 " "
-             "current_fifo_frames=%" PRIu64 " max_fifo_frames=%" PRIu64,
+             "current_fifo_frames=%" PRIu64 " max_fifo_frames=%" PRIu64 " "
+             "dsp_input_frames=%" PRIu64 " dsp_output_frames=%" PRIu64 " "
+             "dsp_buffered_input_frames=%" PRIu64 " dsp_buffered_output_frames=%" PRIu64 " "
+             "dsp_processing_time_us=%" PRIu64 " dsp_max_processing_time_us=%" PRIu64 " "
+             "dsp_resets=%" PRIu64 " dsp_startup_input_frames=%" PRIu64 " "
+             "dsp_first_output_delay_us=%" PRIu64,
              transition, state.multiplier, state.targetFps, state.limitFps ? "true" : "false",
              metrics.StereoFramesProduced, metrics.StereoFramesRead,
              metrics.StereoFramesOverwritten, metrics.StereoFramesRequested,
              metrics.FullyUnderfedCallbacks, metrics.PartiallyUnderfedCallbacks,
-             metrics.CurrentFifoLevel, metrics.MaxFifoLevel);
+             metrics.CurrentFifoLevel, metrics.MaxFifoLevel,
+             metrics.DspInputFrames, metrics.DspOutputFrames,
+             metrics.DspBufferedInputFrames, metrics.DspBufferedOutputFrames,
+             metrics.DspProcessingTimeUs, metrics.DspMaxProcessingTimeUs,
+             metrics.DspResets, metrics.DspStartupInputFrames,
+             metrics.DspFirstOutputDelayUs);
 }
 
 extern "C"
@@ -570,31 +588,35 @@ JNIEXPORT void JNICALL
 Java_me_magnum_melonds_MelonEmulator_setFastForwardEnabled(JNIEnv* env, jobject thiz, jboolean enabled)
 {
     const bool requestedEnabled = enabled == JNI_TRUE;
+    FastForwardState previousState;
     FastForwardState newState;
     FastForwardState loggedState;
     AudioOutputMetrics metrics;
     bool didTransition;
+    bool didDspTransition;
 
     {
         std::lock_guard<std::mutex> lock(fastForwardStateMutex);
+        previousState = fastForwardState;
         didTransition = fastForwardState.enabled != requestedEnabled;
-        loggedState = fastForwardState;
         newState = buildFastForwardState(requestedEnabled, fastForwardState.multiplier);
         fastForwardState = newState;
-
-        if (requestedEnabled)
-            loggedState = newState;
-
-        if (didTransition && requestedEnabled)
-            metrics = MelonDSAndroid::resetAudioOutputMetrics();
-        else if (didTransition)
-            metrics = MelonDSAndroid::getAudioOutputMetrics();
-
+        loggedState = requestedEnabled ? newState : previousState;
+        didDspTransition = dspEnabledForCurrentFastForward(previousState) !=
+                           dspEnabledForCurrentFastForward(newState);
         updatePerformanceHintTargetLocked(newState);
     }
 
     if (didTransition)
+    {
+        if (requestedEnabled)
+            MelonDSAndroid::resetAudioOutputMetrics();
+        if (didDspTransition)
+            MelonDSAndroid::setFastForwardAudioX2Enabled(
+                    dspEnabledForCurrentFastForward(newState));
+        metrics = MelonDSAndroid::getAudioOutputMetrics();
         logFastForwardTransition(requestedEnabled ? "OFF_TO_ON" : "ON_TO_OFF", loggedState, metrics);
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -614,10 +636,26 @@ Java_me_magnum_melonds_MelonEmulator_updateEmulatorConfiguration(JNIEnv* env, jo
 
     MelonDSAndroid::updateEmulatorConfiguration(std::make_unique<MelonDSAndroid::EmulatorConfiguration>(std::move(newConfiguration)));
 
+    FastForwardState previousState;
+    FastForwardState newState;
     {
         std::lock_guard<std::mutex> lock(fastForwardStateMutex);
-        fastForwardState = buildFastForwardState(fastForwardState.enabled, newFastForwardMultiplier);
-        updatePerformanceHintTargetLocked(fastForwardState);
+        previousState = fastForwardState;
+        newState = buildFastForwardState(fastForwardState.enabled, newFastForwardMultiplier);
+        fastForwardState = newState;
+        updatePerformanceHintTargetLocked(newState);
+    }
+
+    const bool oldDspEnabled = dspEnabledForCurrentFastForward(previousState);
+    const bool newDspEnabled = dspEnabledForCurrentFastForward(newState);
+    if (oldDspEnabled != newDspEnabled)
+    {
+        if (newDspEnabled)
+            MelonDSAndroid::resetAudioOutputMetrics();
+        MelonDSAndroid::setFastForwardAudioX2Enabled(newDspEnabled);
+        logFastForwardTransition(newDspEnabled ? "DSP_X2_ON_CONFIG" : "DSP_X2_OFF_CONFIG",
+                                 newDspEnabled ? newState : previousState,
+                                 MelonDSAndroid::getAudioOutputMetrics());
     }
 }
 }
