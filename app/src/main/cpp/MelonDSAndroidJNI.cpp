@@ -331,6 +331,7 @@ Java_me_magnum_melonds_MelonEmulator_startEmulation(JNIEnv* env, jobject thiz)
         std::lock_guard<std::mutex> lock(fastForwardStateMutex);
         fastForwardState = buildFastForwardState(false, fastForwardState.multiplier);
     }
+    MelonDSAndroid::setPokemonBgmGateEnabled(false);
 
     pthread_mutex_init(&emuThreadMutex, NULL);
     pthread_cond_init(&emuThreadCond, NULL);
@@ -607,6 +608,8 @@ Java_me_magnum_melonds_MelonEmulator_setFastForwardEnabled(JNIEnv* env, jobject 
         previousState = fastForwardState;
         didTransition = fastForwardState.enabled != requestedEnabled;
         newState = buildFastForwardState(requestedEnabled, fastForwardState.multiplier);
+        MelonDSAndroid::setPokemonBgmGateEnabled(
+                newState.enabled && newState.multiplier == 2.0f);
         fastForwardState = newState;
         loggedState = requestedEnabled ? newState : previousState;
         didDspTransition = dspTempoForCurrentFastForward(previousState) !=
@@ -649,6 +652,8 @@ Java_me_magnum_melonds_MelonEmulator_updateEmulatorConfiguration(JNIEnv* env, jo
         std::lock_guard<std::mutex> lock(fastForwardStateMutex);
         previousState = fastForwardState;
         newState = buildFastForwardState(fastForwardState.enabled, newFastForwardMultiplier);
+        MelonDSAndroid::setPokemonBgmGateEnabled(
+                newState.enabled && newState.multiplier == 2.0f);
         fastForwardState = newState;
         updatePerformanceHintTargetLocked(newState);
     }

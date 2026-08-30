@@ -219,6 +219,12 @@ namespace MelonDSAndroid
         instance->reset();
     }
 
+    void setPokemonBgmGateEnabled(bool enabled)
+    {
+        if (instance)
+            instance->setPokemonBgmGateEnabled(enabled);
+    }
+
     bool saveState(const char* path)
     {
         Platform::FileHandle* saveStateFile = Platform::OpenFile(path, Platform::FileMode::Write);
