@@ -1,6 +1,6 @@
 [submodule "melonDS-android-lib"]
 	path = melonDS-android-lib
-	url = https://github.com/rafaelvcaetano/melonDS-android-lib.git
+	url = https://github.com/Proginji2000/melonDS-core-fastforward-audio.git
 
 [submodule "app/src/main/cpp/oboe"]
 	path = app/src/main/cpp/oboe
