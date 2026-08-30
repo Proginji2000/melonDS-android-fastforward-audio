@@ -2,9 +2,19 @@ name: Fork CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - thor-fastforward-audio
+  pull_request:
+    branches:
+      - thor-fastforward-audio
 
 permissions:
   contents: read
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
