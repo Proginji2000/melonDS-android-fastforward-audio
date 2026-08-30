@@ -1,14 +1,79 @@
-name: Fork CI placeholder
+name: Fork CI
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  notice:
+  build-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
-      - name: Explain CI status
+      - name: Check private core token
+        env:
+          CORE_REPO_TOKEN: ${{ secrets.CORE_REPO_TOKEN }}
         run: |
-          echo "Automatic fork CI is intentionally disabled for now."
-          echo "The Android repository depends on a separate private core submodule."
-          echo "Configure a cross-repository read credential before enabling build/test CI."
+          if [ -z "$CORE_REPO_TOKEN" ]; then
+            echo "::error::Missing CORE_REPO_TOKEN repository secret. See docs/CI.md."
+            exit 1
+          fi
+
+      - name: Checkout fork and private submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.CORE_REPO_TOKEN }}
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.0.13004108" \
+            "cmake;3.22.1"
+
+      - name: Verify private core checkout
+        run: |
+          EXPECTED_CORE=$(git rev-parse HEAD:melonDS-android-lib)
+          ACTUAL_CORE=$(git -C melonDS-android-lib rev-parse HEAD)
+          echo "Expected core: $EXPECTED_CORE"
+          echo "Actual core:   $ACTUAL_CORE"
+          test "$EXPECTED_CORE" = "$ACTUAL_CORE"
+          git submodule status --recursive
+
+      - name: Run unit tests
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:testGitHubProdDebugUnitTest --rerun-tasks
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon :app:assembleGitHubProdDebug
+
+      - name: Build RelWithDebInfo native targets
+        run: ./gradlew --no-daemon :app:buildCMakeRelWithDebInfo
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: melonDS-fastforward-debug
+          path: app/build/outputs/apk/gitHubProd/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
