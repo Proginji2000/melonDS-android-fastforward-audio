@@ -1,62 +1,120 @@
-# melonDS Android port
-Android port of [melonDS](https://melonds.kuribo64.net/), a DS and DSi emulator.
+# melonDS Android – Fast-Forward Audio Fork
 
-[<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=me.magnum.melonds&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1)[<img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" alt="Get it on GitHub" height="80">](https://github.com/rafaelvcaetano/melonDS-android/releases/latest)
+Experimental fork of [melonDS Android](https://github.com/rafaelvcaetano/melonDS-android) focused on fast-forward audio behavior on Android.
 
-|Rom List|Dark Theme|Pocket Physics|Layout Editor|
-|---|---|---|---|
-|![Screenshot 1](./.github/images/screenshot_mobile0.png)|![Screenshot 2](./.github/images/screenshot_mobile1.png)|![Screenshot 3](./.github/images/screenshot_mobile2.png)|![Screenshot 4](./.github/images/screenshot_mobile3.png)|
+The project currently has two layers:
 
-# Missing Features
-*  Local Multiplayer
-*  DSi SD card support
-*  Customizable button skins
-*  More display filters
+- **Global pitch-preserving fast-forward** for ×2 / ×3 / ×4 using SoundTouch 2.4.1.
+- **Pokémon-specific BGM timing** for one strictly whitelisted Pokémon White FR revision, allowing the game to run at ×2 while background music remains at approximately ×1 real-time speed.
 
-# Performance
-Performance is solid on 64 bit devices with thread rendering and JIT enabled, and should run at full speed on flagship devices. Performance on older devices, specially
-32 bit devices, is very poor due to the lack of JIT support.
+This repository contains the Android/frontend integration. The modified melonDS core is kept in the private submodule [`melonDS-core-fastforward-audio`](https://github.com/Proginji2000/melonDS-core-fastforward-audio).
 
-# Integration with third-party frontends
-It's possible to launch melonDS from third part frontends. For that, you will need to have the ROMs you want to launch already scanned by melonDS. Then, you can configure your
-third-party frontend with the following configuration:
-*  Package name: `me.magnum.melonds`
-*  Activity name: `me.magnum.melonds.ui.emulator.EmulatorActivity`
-*  Parameters (choose one):
-    * Intent data (preferred) - a URI of the NDS ROM (ZIP and 7z files are supported). Ensure [read permission is granted](https://developer.android.com/reference/android/content/Intent#FLAG_GRANT_READ_URI_PERMISSION)
-    * `uri` (deprecated) - a string with the [SAF](https://developer.android.com/guide/topics/providers/create-document-provider) URI of the NDS ROM (ZIP and 7z files are supported)
-    * `PATH` (deprecated) - a string with the absolute path to the NDS ROM (ZIP and 7z files are supported)
+## Current status
 
-### Pegasus metadata files
-* [melonds.metadata.txt](./.github/pegasus/melonds.metadata.txt) 
-* [melonds-nightly.metadata.txt](./.github/pegasus/melonds-nightly.metadata.txt) 
+| Feature | Status |
+| --- | --- |
+| Normal-speed audio path | Preserved |
+| Global fast-forward ×2 | Validated |
+| Global fast-forward ×3 | Validated |
+| Global fast-forward ×4 | Validated |
+| Pitch-preserving SoundTouch path | Validated |
+| Pokémon White FR game ×2 / BGM ×1 | Validated |
+| Pokémon White FR SFX / ME / cry at game speed | Validated |
+| Pokémon-specific ×3 / ×4 BGM preservation | Not implemented yet |
+| Other Pokémon DS titles | Not yet profiled/whitelisted |
 
-### Info regarding save files
-When launching ROMs from third-party frontends, if melonDS hasn't scanned that particular ROM previously, it won't be able to create the save file next to the ROM file if the
-option "Save next to ROM file" is enabled in the settings or the save file directory is not set. Instead, melonDS will create a save file in
-`Android/data/me.magnum.melonds/files/saves`
+For non-whitelisted games, or for Pokémon White at ×3 / ×4, the emulator uses the global SoundTouch fast-forward path only.
 
-# Nightly Builds
+## Validated Phase 3 result
 
-To have access to the latest changes, you can install nightly builds that you can find [here](https://github.com/rafaelvcaetano/melonDS-android/releases/tag/nightly-release).
+On the exact Pokémon White FR revision currently whitelisted:
 
-Be aware that these builds can contain more bugs than usual and you may need to clear your app data to get it to work properly after updates.
+- game speed: approximately **2.000×**
+- field/battle BGM: approximately **0.995× wall-clock**
+- SFX: approximately **1.99×**
+- ME 1303: approximately **2.002×**
+- cry/UNKNOWN events: approximately **2.006×**
+- post-DSP overwrite: **0** in validation runs
+- stale BGM ExChannel ownership: **0**
+- ARM7 JIT: validated
 
-# Building
-To build the project you will need Android SDK, NDK and CMake.
+The current reproducible checkpoint is tagged:
 
-## Build steps:
-1.  Clone the project, including submodules with:
-    
-    `git clone --recurse-submodules https://github.com/rafaelvcaetano/melonDS-android.git`
-2.  Install the Android SDK, NDK and CMake
-3.  Build with:
-    1.  Unix: `./gradlew :app:assembleGitHubProdDebug`
-    2.  Windows: `gradlew.bat :app:assembleGitHubProdDebug`
-4.  The generated APK can be found at `app/gitHubProd/debug`
+```text
+thor-pokemon-white-bgm-x1-phase3
+```
 
-If you want to create a release build, you will need to modify your `local.properties` file to include the following fields:  
-*  `MELONDS_KEYSTORE=<path_to_your_keystore>`
-*  `MELONDS_KEYSTORE_PASSWORD=<keystore_password>`
-*  `MELONDS_KEY_ALIAS=<name_of_your_key_alias>`
-*  `MELONDS_KEY_PASSWORD=<key_alias_password>`
+## Architecture
+
+The global path uses SoundTouch before the final Android/Oboe output FIFO. The Pokémon-specific path identifies BGM sequences in the guest audio engine and slows only their control-time progression before the mixed stream is processed by SoundTouch.
+
+This keeps BGM musical time near ×1 while SFX, ME and unknown/cry events continue to follow game speed.
+
+See:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Compatibility](docs/COMPATIBILITY.md)
+- [Building](docs/BUILDING.md)
+- [Testing and validation](docs/TESTING.md)
+- [Roadmap](docs/ROADMAP.md)
+
+## Clone
+
+This repository uses submodules.
+
+```bash
+git clone --recurse-submodules https://github.com/Proginji2000/melonDS-android-fastforward-audio.git
+cd melonDS-android-fastforward-audio
+git checkout thor-fastforward-audio
+git submodule update --init --recursive
+```
+
+The Pokémon Phase 3 checkpoint can be checked out with:
+
+```bash
+git checkout thor-pokemon-white-bgm-x1-phase3
+git submodule update --init --recursive
+```
+
+## Build
+
+Debug APK used during development:
+
+```powershell
+.\gradlew.bat :app:assembleGitHubProdDebug
+```
+
+Release-like native build used for performance validation:
+
+```powershell
+.\gradlew.bat :app:buildCMakeRelWithDebInfo
+```
+
+Unit tests:
+
+```powershell
+.\gradlew.bat :app:testGitHubProdDebugUnitTest --rerun-tasks
+```
+
+See [BUILDING.md](docs/BUILDING.md) for details.
+
+## Repository safety
+
+Do **not** commit or distribute copyrighted game data or private test artifacts. In particular, keep these out of the repository:
+
+- Nintendo DS ROMs (`*.nds`)
+- SRAM/save files and savestates
+- extracted SDAT/ARM binaries from commercial games
+- PCM captures containing copyrighted game music/audio
+- signing keystores and passwords
+- device-specific private data
+
+The implementation identifies supported software by hashes and metadata only; no game ROM or extracted copyrighted asset is required in source control.
+
+## Upstream and licensing
+
+This is a modified fork of melonDS Android / melonDS and retains the upstream GPLv3 licensing terms. See [`LICENSE`](LICENSE).
+
+SoundTouch 2.4.1 is vendored under LGPL-2.1-or-later. Its source, license and redistribution notes are documented in [`app/src/main/cpp/third_party/README.md`](app/src/main/cpp/third_party/README.md).
+
+The project is experimental and is not affiliated with Nintendo, The Pokémon Company, Game Freak or Creatures Inc.
