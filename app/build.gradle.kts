@@ -89,6 +89,7 @@ android {
     sourceSets {
         // Adds exported schema location as test app assets.
         getByName("androidTest").assets.directories += "$projectDir/schemas"
+        getByName("test").resources.directories += "$projectDir/widescreen"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21

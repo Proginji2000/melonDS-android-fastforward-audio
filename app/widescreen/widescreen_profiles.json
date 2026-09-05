@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "romIdentity": {
+    "algorithm": "GAMECODE_PLUS_USRCHEAT_HEADER_CHECKSUM_V1",
+    "gameCode": {
+      "offsetBytes": 12,
+      "lengthBytes": 4,
+      "encoding": "ASCII",
+      "caseSensitive": true
+    },
+    "headerChecksum32": {
+      "inputOffsetBytes": 0,
+      "inputLengthBytes": 512,
+      "implementation": "RomProcessor/Crc32",
+      "initialValueHex": "FFFFFFFF",
+      "reflectedPolynomialHex": "EDB88320",
+      "finalXor": false,
+      "outputFormat": "UPPERCASE_8_HEX"
+    }
+  },
+  "profiles": [
+    {
+      "id": "super-mario-64-ds-eur-v1-0",
+      "rom": {
+        "gameCode": "ASMP",
+        "headerChecksum32": "D3D9F14A"
+      },
+      "targetRatio": "16:9",
+      "targetScreen": "TOP",
+      "patch": {
+        "format": "ACTION_REPLAY_DS",
+        "binaryEncoding": "UINT32_WORDS_LITTLE_ENDIAN",
+        "byteLength": 80,
+        "sha256": "400d02e066a483c671c6fb52adb1b592f9db976de8a4bc15f8491bcfd567de21",
+        "actionReplayLines": [
+          "520209C4 E59D0094",
+          "020209C8 E3A09C15",
+          "0200D03C 00001C71",
+          "D2000000 00000000",
+          "520B21E8 E59F00E8",
+          "020B227C E3A02B07",
+          "D2000000 00000000",
+          "5211530C E59F205C",
+          "02115370 00001C71",
+          "D2000000 00000000"
+        ]
+      },
+      "classification": {
+        "sourceRatio": "NATIVE_16_9",
+        "form": "MIXED_CODE_AND_DATA",
+        "ratioSemantics": "MULTI_CONSTANT_RATIO"
+      },
+      "sourceRefs": [
+        "desmume-forum-sm64ds-pal-16-9",
+        "shocoman-sm64ds-rom-id"
+      ],
+      "validation": {
+        "identity": "RESOLVED",
+        "ar": "SUPPORTED",
+        "ratio": "UNDERSTOOD",
+        "targetScreen": "RESOLVED",
+        "conversion": "NOT_NEEDED",
+        "compatibility": "NO_KNOWN_INCOMPATIBILITY",
+        "trust": "RUNTIME_VALIDATED",
+        "activation": "APPROVED"
+      }
+    },
+    {
+      "id": "pokemon-white-fra-v1-0",
+      "rom": {
+        "gameCode": "IRAF",
+        "headerChecksum32": "031EF208"
+      },
+      "upstreamIdentity": {
+        "namespace": "TWILIGHT_WIDESCREEN_FILENAME_V1",
+        "gameCode": "IRAF",
+        "headerChecksum16": "BC1D"
+      },
+      "targetRatio": "16:9",
+      "targetScreen": "TOP",
+      "patch": {
+        "format": "ACTION_REPLAY_DS",
+        "binaryEncoding": "UINT32_WORDS_LITTLE_ENDIAN",
+        "byteLength": 24,
+        "sha256": "8de30d3a79c20f8dcb7c0390e246dbd6c355adf3ea9b6fa9d0edfdfddf4abad1",
+        "actionReplayLines": [
+          "922822A8 00001555",
+          "122822A8 00001C72",
+          "D2000000 00000000"
+        ]
+      },
+      "classification": {
+        "sourceRatio": "NATIVE_16_10",
+        "form": "CONDITIONAL_DATA_WRITES",
+        "ratioSemantics": "DIRECT_RATIO_Q12"
+      },
+      "sourceRefs": [
+        "twilightmenu-v27-24-1-iraf-bc1d"
+      ],
+      "conversion": {
+        "id": "direct-q12-aspect-v1",
+        "sourceRef": "twilightmenu-v27-24-1-iraf-bc1d",
+        "sourcePatchSha256": "74f06acc1af52765f1e87a4dd40473e7dc091c785a71eca5621205694e7de8ca",
+        "sourceRatio": "16:10",
+        "targetRatio": "16:9",
+        "q12Scale": 4096,
+        "rounding": "NEAREST",
+        "expectedSourceValueHex": "199A",
+        "expectedTargetValueHex": "1C72",
+        "calculation": "round((16 / 9) * 4096) = 0x1C72",
+        "context": {
+          "lineNumber": 2,
+          "before": "122822A8 0000199A",
+          "after": "122822A8 00001C72",
+          "expectedModificationCount": 1
+        },
+        "resultPatchSha256": "8de30d3a79c20f8dcb7c0390e246dbd6c355adf3ea9b6fa9d0edfdfddf4abad1"
+      },
+      "validation": {
+        "identity": "RESOLVED",
+        "ar": "SUPPORTED",
+        "ratio": "UNDERSTOOD",
+        "targetScreen": "RESOLVED",
+        "conversion": "SAFE_RECIPE_APPLIED",
+        "compatibility": "NO_KNOWN_INCOMPATIBILITY",
+        "trust": "RUNTIME_VALIDATED",
+        "activation": "APPROVED"
+      }
+    }
+  ]
+}

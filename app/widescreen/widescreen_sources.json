@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "desmume-forum-sm64ds-pal-16-9",
+      "kind": "FORUM_POST",
+      "provenance": "PARTIAL",
+      "title": "DeSmuME forum Widescreen Codes: Super Mario 64 DS PAL 16:9",
+      "locator": {
+        "url": "https://forums.desmume.org/viewtopic.php?pid=29003"
+      },
+      "contributors": [],
+      "history": [
+        "Published PAL 16:9 Action Replay code used by the runtime profile."
+      ],
+      "patchLicense": "NOASSERTION"
+    },
+    {
+      "id": "shocoman-sm64ds-rom-id",
+      "kind": "CODE_REFERENCE",
+      "provenance": "CORROBORATING",
+      "title": "Analog Controls for NDS Games on 3DS ROM identity table",
+      "locator": {
+        "url": "https://github.com/shocoman/Analog-Controls-for-NDS-Games-on-3DS/blob/master/generate_patch.py"
+      },
+      "contributors": [],
+      "history": [
+        "Corroborates Action Replay identity ASMP-D3D9F14A; it is not the patch source."
+      ],
+      "patchLicense": "NOASSERTION"
+    },
+    {
+      "id": "twilightmenu-v27-24-1-iraf-bc1d",
+      "kind": "GIT_ARTIFACT",
+      "provenance": "EXACT",
+      "title": "TWiLight Menu++ Pokemon White France widescreen artifact",
+      "locator": {
+        "url": "https://github.com/DS-Homebrew/TWiLightMenu",
+        "version": "v27.24.1",
+        "commit": "68d04c1a621a8d330e7233efcfcb93c94b30a3a6",
+        "path": "resources/widescreen/IRAF-BC1D.bin"
+      },
+      "artifact": {
+        "format": "ACTION_REPLAY_DS",
+        "binaryEncoding": "UINT32_WORDS_LITTLE_ENDIAN",
+        "byteLength": 24,
+        "sha256": "74f06acc1af52765f1e87a4dd40473e7dc091c785a71eca5621205694e7de8ca",
+        "actionReplayLines": [
+          "922822A8 00001555",
+          "122822A8 0000199A",
+          "D2000000 00000000"
+        ]
+      },
+      "contributors": [
+        "vaguerant"
+      ],
+      "history": [
+        "PR #732: https://github.com/DS-Homebrew/TWiLightMenu/pull/732",
+        "PR #780: https://github.com/DS-Homebrew/TWiLightMenu/pull/780",
+        "Ratio constant corrected from 0x1999 to 0x199A."
+      ],
+      "repositoryLicense": "GPL-3.0",
+      "patchLicense": "NOASSERTION"
+    }
+  ]
+}
