@@ -292,6 +292,63 @@ class WidescreenManifestTest {
     }
 
     @Test
+    fun manifestArDeclarationMustMatchCalculatedCapabilityAndApproval() {
+        val mario = canonical.profiles.profiles.first()
+        val partialPatch = mario.patch.copy(
+            byteLength = 16,
+            sha256 = "f3e5fe699acf4b1ade572c7cb7c7acc4765f10c1e5183097c3f1bc2d5546757c",
+            actionReplayLines = listOf(
+                "C5000000 00000000",
+                "D0000000 00000000",
+            ),
+        )
+        val partialProfile = mario.copy(
+            patch = partialPatch,
+            validation = mario.validation.copy(
+                ar = ActionReplayValidation.PARTIAL,
+                activation = ActivationValidation.DISABLED,
+            ),
+        )
+        validate(profiles = replaceProfile(0) { partialProfile })
+
+        assertRejected("SUPPORTED declaration for calculated partial AR") {
+            validate(
+                profiles = replaceProfile(0) {
+                    partialProfile.copy(
+                        validation = partialProfile.validation.copy(
+                            ar = ActionReplayValidation.SUPPORTED,
+                        ),
+                    )
+                },
+            )
+        }
+        assertRejected("APPROVED profile with calculated partial AR") {
+            validate(
+                profiles = replaceProfile(0) {
+                    partialProfile.copy(
+                        validation = partialProfile.validation.copy(
+                            activation = ActivationValidation.APPROVED,
+                        ),
+                    )
+                },
+            )
+        }
+
+        val unsupportedProfile = mario.copy(
+            patch = mario.patch.copy(
+                byteLength = 8,
+                sha256 = "993c93b841e8b9faabfbb230b6e7aaf6a18516ec7219433d075f2dd93b7c934e",
+                actionReplayLines = listOf("C4000000 00000000"),
+            ),
+            validation = mario.validation.copy(
+                ar = ActionReplayValidation.UNSUPPORTED,
+                activation = ActivationValidation.DISABLED,
+            ),
+        )
+        validate(profiles = replaceProfile(0) { unsupportedProfile })
+    }
+
+    @Test
     fun conversionRecipeRejectsAnyContextOrHashDrift() {
         val pokemon = canonical.profiles.profiles.last()
         val conversion = requireNotNull(pokemon.conversion)

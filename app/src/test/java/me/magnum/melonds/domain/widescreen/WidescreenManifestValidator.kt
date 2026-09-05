@@ -429,6 +429,8 @@ internal object WidescreenManifestValidator {
             }
         }
         validatePatch(profile.patch, "profile ${profile.id}")
+        val calculatedAr = ActionReplayValidator.validate(profile.patch.actionReplayLines)
+        validateActionReplayCompatibility(profile, calculatedAr)
         requireManifest(profile.sourceRefs.isNotEmpty()) { "No sourceRef for ${profile.id}" }
         requireManifest(profile.sourceRefs.distinct().size == profile.sourceRefs.size) {
             "Duplicate sourceRef for ${profile.id}"
@@ -449,12 +451,33 @@ internal object WidescreenManifestValidator {
             }
         }
         profile.conversion?.let { validateConversion(profile, it, sourcesById) }
-        validateActivation(profile, sourcesById)
+        validateActivation(profile, sourcesById, calculatedAr.status)
+    }
+
+    private fun validateActionReplayCompatibility(
+        profile: CanonicalWidescreenProfile,
+        calculated: ActionReplayValidationResult,
+    ) {
+        val expected = when (profile.validation.ar) {
+            ActionReplayValidation.SUPPORTED -> ActionReplayValidationStatus.SUPPORTED
+            ActionReplayValidation.PARTIAL -> ActionReplayValidationStatus.PARTIALLY_SUPPORTED
+            ActionReplayValidation.UNSUPPORTED -> ActionReplayValidationStatus.UNSUPPORTED
+            ActionReplayValidation.UNKNOWN -> null
+        }
+        requireManifest(expected != null) {
+            "AR compatibility is UNKNOWN for ${profile.id}; calculated ${calculated.status}"
+        }
+        requireManifest(calculated.status == expected) {
+            val details = calculated.diagnostics.joinToString("; ").ifBlank { "no diagnostics" }
+            "AR capability mismatch for ${profile.id}: declared ${profile.validation.ar}, " +
+                "calculated ${calculated.status}: $details"
+        }
     }
 
     private fun validateActivation(
         profile: CanonicalWidescreenProfile,
         sourcesById: Map<String, WidescreenSourceRecord>,
+        calculatedAr: ActionReplayValidationStatus,
     ) {
         if (profile.validation.activation != ActivationValidation.APPROVED) return
 
@@ -463,6 +486,9 @@ internal object WidescreenManifestValidator {
         }
         requireManifest(profile.validation.ar == ActionReplayValidation.SUPPORTED) {
             "APPROVED profile ${profile.id} has unsupported AR"
+        }
+        requireManifest(calculatedAr == ActionReplayValidationStatus.SUPPORTED) {
+            "APPROVED profile ${profile.id} has calculated AR status $calculatedAr"
         }
         requireManifest(profile.validation.ratio == RatioValidation.UNDERSTOOD) {
             "APPROVED profile ${profile.id} has unresolved ratio"
