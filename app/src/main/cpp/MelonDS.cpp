@@ -219,10 +219,10 @@ namespace MelonDSAndroid
         instance->reset();
     }
 
-    void setPokemonBgmGateEnabled(bool enabled)
+    void setPokemonBgmGateDivisor(int divisor)
     {
         if (instance)
-            instance->setPokemonBgmGateEnabled(enabled);
+            instance->setPokemonBgmGateDivisor(divisor);
     }
 
     bool saveState(const char* path)

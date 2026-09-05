@@ -64,7 +64,7 @@ namespace MelonDSAndroid {
     extern void pause();
     extern void resume();
     extern void reset();
-    extern void setPokemonBgmGateEnabled(bool enabled);
+    extern void setPokemonBgmGateDivisor(int divisor);
     extern bool saveState(const char* path);
     extern bool loadState(const char* path);
     extern bool loadRewindState(melonDS::RewindSaveState rewindSaveState);

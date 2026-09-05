@@ -469,9 +469,9 @@ void MelonInstance::setAudioOutputSkew(double skew)
     nds->SPU.SetOutputSkew(skew);
 }
 
-void MelonInstance::setPokemonBgmGateEnabled(bool enabled)
+void MelonInstance::setPokemonBgmGateDivisor(int divisor)
 {
-    nds->PokemonWhiteAudio.SetBgmGateEnabled(enabled);
+    nds->PokemonWhiteAudio.SetBgmGateDivisor(static_cast<u32>(divisor));
 }
 
 bool MelonInstance::takeScreenshot()

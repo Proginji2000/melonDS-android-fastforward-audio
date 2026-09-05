@@ -1,18 +1,163 @@
 #include "MelonDSAudio.h"
 #include "FastForwardAudioProcessor.h"
+#include "MelonDS.h"
 #include "MicInputOboeCallback.h"
 #include "mic_blow.h"
 #include "OboeCallback.h"
 #include "MelonLog.h"
 #include <oboe/Oboe.h>
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <memory>
 
 #define MIC_BUFFER_SIZE 2048
 
 constexpr char FF_AUDIO_DIAG_TAG[] = "FFAudioDiag";
 constexpr float INTERNAL_FRAME_RATE = 59.8260982880808f;
+
+namespace
+{
+constexpr bool EnablePreDspCapture = false;
+constexpr size_t PreDspCaptureSampleRate = 48000;
+constexpr size_t PreDspCaptureChannels = 2;
+constexpr size_t PreDspCaptureFrames = 30 * PreDspCaptureSampleRate;
+constexpr size_t PreDspCaptureSamples = PreDspCaptureFrames * PreDspCaptureChannels;
+constexpr uint32_t PreDspCaptureDataBytes =
+        PreDspCaptureSamples * sizeof(melonDS::s16);
+
+enum class PreDspCaptureState : uint8_t
+{
+    Idle,
+    Capturing,
+    Ready,
+    Writing,
+    Written,
+    Failed,
+};
+
+struct WavHeader
+{
+    char Riff[4];
+    uint32_t RiffSize;
+    char Wave[4];
+    char Fmt[4];
+    uint32_t FmtSize;
+    uint16_t AudioFormat;
+    uint16_t Channels;
+    uint32_t SampleRate;
+    uint32_t ByteRate;
+    uint16_t BlockAlign;
+    uint16_t BitsPerSample;
+    char Data[4];
+    uint32_t DataSize;
+};
+
+static_assert(sizeof(WavHeader) == 44);
+static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
+
+std::array<melonDS::s16, PreDspCaptureSamples> preDspCaptureBuffer {};
+std::atomic<PreDspCaptureState> preDspCaptureState {PreDspCaptureState::Idle};
+std::atomic<size_t> preDspCapturedFrames {0};
+std::atomic<size_t> preDspCaptureBlocks {0};
+
+std::string preDspCapturePath()
+{
+    return MelonDSAndroid::internalFilesDir + "/thor_ff_source_normal.wav";
+}
+
+void armPreDspCapture()
+{
+    if constexpr (!EnablePreDspCapture)
+        return;
+
+    std::remove(preDspCapturePath().c_str());
+    preDspCapturedFrames.store(0, std::memory_order_relaxed);
+    preDspCaptureBlocks.store(0, std::memory_order_relaxed);
+    preDspCaptureState.store(PreDspCaptureState::Capturing, std::memory_order_release);
+}
+
+melonDS::AudioOutputProcessorResult capturePreDspAudio(
+        void*, melonDS::s16* samples, int frames)
+{
+    melonDS::AudioOutputProcessorResult result;
+    result.OutputFrames = std::max(0, frames);
+
+    if constexpr (!EnablePreDspCapture)
+        return result;
+    if (frames <= 0 ||
+        preDspCaptureState.load(std::memory_order_acquire) !=
+                PreDspCaptureState::Capturing)
+        return result;
+
+    const size_t offset = preDspCapturedFrames.load(std::memory_order_relaxed);
+    const size_t copiedFrames = std::min(
+            static_cast<size_t>(frames), PreDspCaptureFrames - offset);
+    std::memcpy(preDspCaptureBuffer.data() + offset * PreDspCaptureChannels,
+                samples,
+                copiedFrames * PreDspCaptureChannels * sizeof(melonDS::s16));
+
+    const size_t capturedFrames = offset + copiedFrames;
+    preDspCaptureBlocks.fetch_add(1, std::memory_order_relaxed);
+    preDspCapturedFrames.store(capturedFrames, std::memory_order_release);
+    if (capturedFrames == PreDspCaptureFrames)
+        preDspCaptureState.store(PreDspCaptureState::Ready, std::memory_order_release);
+
+    return result;
+}
+
+void writePreDspCaptureIfReady()
+{
+    if constexpr (!EnablePreDspCapture)
+        return;
+
+    PreDspCaptureState expected = PreDspCaptureState::Ready;
+    if (!preDspCaptureState.compare_exchange_strong(
+            expected, PreDspCaptureState::Writing, std::memory_order_acq_rel))
+        return;
+
+    const WavHeader header = {
+            {'R', 'I', 'F', 'F'},
+            36 + PreDspCaptureDataBytes,
+            {'W', 'A', 'V', 'E'},
+            {'f', 'm', 't', ' '},
+            16,
+            1,
+            PreDspCaptureChannels,
+            PreDspCaptureSampleRate,
+            PreDspCaptureSampleRate * PreDspCaptureChannels * sizeof(melonDS::s16),
+            PreDspCaptureChannels * sizeof(melonDS::s16),
+            8 * sizeof(melonDS::s16),
+            {'d', 'a', 't', 'a'},
+            PreDspCaptureDataBytes,
+    };
+
+    const std::string path = preDspCapturePath();
+    FILE* file = std::fopen(path.c_str(), "wb");
+    bool written = false;
+    if (file != nullptr)
+    {
+        const bool samplesWritten =
+                std::fwrite(&header, sizeof(header), 1, file) == 1 &&
+                std::fwrite(preDspCaptureBuffer.data(), sizeof(melonDS::s16),
+                            PreDspCaptureSamples, file) == PreDspCaptureSamples;
+        written = std::fclose(file) == 0 && samplesWritten;
+    }
+
+    preDspCaptureState.store(
+            written ? PreDspCaptureState::Written : PreDspCaptureState::Failed,
+            std::memory_order_release);
+    LOG_INFO(FF_AUDIO_DIAG_TAG,
+             "pre_dsp_capture written=%s frames=%zu blocks=%zu path=%s",
+             written ? "true" : "false",
+             preDspCapturedFrames.load(std::memory_order_acquire),
+             preDspCaptureBlocks.load(std::memory_order_relaxed),
+             path.c_str());
+}
+}
 
 std::weak_ptr<MelonDSAndroid::MelonInstance> activeInstance;
 
@@ -336,6 +481,8 @@ namespace MelonDSAndroid
         const double skew = std::clamp(60.0 / INTERNAL_FRAME_RATE, 0.995, 1.005);
         instance->setAudioOutputSkew(skew);
         activeInstance = instance;
+        if constexpr (EnablePreDspCapture)
+            instance->setAudioOutputProcessor(&capturePreDspAudio, nullptr);
         if (outputCallback)
             outputCallback->activeInstance = activeInstance;
     }
@@ -343,13 +490,22 @@ namespace MelonDSAndroid
     AudioOutputMetrics getAudioOutputMetrics()
     {
         auto instance = activeInstance.lock();
+        writePreDspCaptureIfReady();
+        if (fastForwardAudioProcessor)
+            fastForwardAudioProcessor->LogDiagnostics("query");
         return instance ? instance->getAudioOutputMetrics() : AudioOutputMetrics{};
     }
 
     AudioOutputMetrics resetAudioOutputMetrics()
     {
         auto instance = activeInstance.lock();
-        return instance ? instance->resetAudioOutputMetrics() : AudioOutputMetrics{};
+        const AudioOutputMetrics metrics =
+                instance ? instance->resetAudioOutputMetrics() : AudioOutputMetrics{};
+        if (fastForwardAudioProcessor)
+            fastForwardAudioProcessor->ResetDiagnostics();
+        if (instance)
+            armPreDspCapture();
+        return metrics;
     }
 
     void setFastForwardAudioTempo(int tempo)
@@ -373,7 +529,8 @@ namespace MelonDSAndroid
             const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - start).count();
             LOG_INFO(FF_AUDIO_DIAG_TAG,
-                     "dsp_transition enabled=true backend=soundtouch tempo=%d.000 pitch=1.000 "
+                     "dsp_transition enabled=true backend=rubberband_r2_async_channels_together "
+                     "tempo=%d.000 pitch=1.000 "
                      "transition_us=%lld configured_initial_latency_frames=%d",
                      tempo,
                      static_cast<long long>(transitionUs),
@@ -388,7 +545,8 @@ namespace MelonDSAndroid
         const auto transitionUs = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - start).count();
         LOG_INFO(FF_AUDIO_DIAG_TAG,
-                 "dsp_transition enabled=false backend=soundtouch transition_us=%lld",
+                 "dsp_transition enabled=false backend=rubberband_r2_async_channels_together "
+                 "transition_us=%lld",
                  static_cast<long long>(transitionUs));
     }
 
@@ -406,7 +564,8 @@ namespace MelonDSAndroid
         const auto resetUs = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - start).count();
         LOG_INFO(FF_AUDIO_DIAG_TAG,
-                 "dsp_stream_suspend reason=pause backend=soundtouch reset_us=%lld",
+                 "dsp_stream_suspend reason=pause "
+                 "backend=rubberband_r2_async_channels_together reset_us=%lld",
                  static_cast<long long>(resetUs));
     }
 
@@ -419,18 +578,22 @@ namespace MelonDSAndroid
             return;
 
         const auto start = std::chrono::steady_clock::now();
+        fastForwardAudioProcessor->ResumeStream();
         instance->setAudioOutputProcessor(
                 &FastForwardAudioProcessor::ProcessCallback,
                 fastForwardAudioProcessor.get());
         fastForwardAudioNeedsResume = false;
         const auto resumeUs = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - start).count();
-        LOG_INFO(FF_AUDIO_DIAG_TAG, "dsp_stream_resume backend=soundtouch resume_us=%lld",
+        LOG_INFO(FF_AUDIO_DIAG_TAG,
+                 "dsp_stream_resume backend=rubberband_r2_async_channels_together "
+                 "resume_us=%lld",
                  static_cast<long long>(resumeUs));
     }
 
     void cleanupAudio()
     {
+        writePreDspCaptureIfReady();
         if (fastForwardAudioProcessor && fastForwardAudioEnabled)
             setFastForwardAudioTempo(0);
         cleanupAudioOutputStream();
@@ -459,5 +622,6 @@ namespace MelonDSAndroid
             micInputStream->requestStop();
 
         resetFastForwardAudioForPause();
+        writePreDspCaptureIfReady();
     }
 }

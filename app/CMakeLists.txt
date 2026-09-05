@@ -14,6 +14,7 @@ set(OBOE ${ANDROID-CPP}/oboe)
 set(FAAD2 ${ANDROID-CPP}/faad2)
 set(RCHEEVOS ${ANDROID-CPP}/rcheevos)
 set(SOUNDTOUCH ${ANDROID-CPP}/third_party/soundtouch)
+set(RUBBERBAND ${ANDROID-CPP}/third_party/rubberband)
 
 if(ANDROID)
     string(REPLACE "-O2" "-O3" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
@@ -45,6 +46,10 @@ add_library(soundtouch STATIC
 target_include_directories(soundtouch PUBLIC ${SOUNDTOUCH}/include)
 target_compile_definitions(soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES)
 target_compile_options(soundtouch PRIVATE -ffast-math)
+
+add_library(rubberband STATIC ${RUBBERBAND}/single/RubberBandSingle.cpp)
+target_include_directories(rubberband PUBLIC ${RUBBERBAND})
+target_compile_features(rubberband PUBLIC cxx_std_11)
 
 if(ANDROID AND ANDROID_ABI MATCHES "^(armeabi-v7a|arm64-v8a)$")
     target_compile_definitions(soundtouch PRIVATE SOUNDTOUCH_USE_NEON)
@@ -101,11 +106,12 @@ target_include_directories(melonDS-android-frontend PUBLIC
         ${FAAD2}/include
         ${RCHEEVOS}/include
 )
-target_link_libraries(melonDS-android-frontend android core net-utils oboe faad enet rcheevos soundtouch EGL GLESv3)
+target_link_libraries(melonDS-android-frontend android core net-utils oboe faad enet rcheevos soundtouch rubberband EGL GLESv3)
 
 if(ANDROID)
     target_compile_options(core PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
     target_compile_options(soundtouch PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:CXX>>:-flto=thin>")
+    target_compile_options(rubberband PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:CXX>>:-flto=thin>")
     target_compile_options(melonDS-android-frontend PRIVATE "$<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
     target_link_options(melonDS-android-frontend PRIVATE "$<$<CONFIG:RelWithDebInfo>:-flto=thin>")
 endif()

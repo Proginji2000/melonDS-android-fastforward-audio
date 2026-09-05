@@ -8,3 +8,9 @@
 /captures
 .externalNativeBuild
 .kotlin
+
+# Local fast-forward audio benchmark captures
+/rubberband_r2_x2.wav
+/rubberband_r3_x2.wav
+/soundtouch_p1_x2.wav
+/source_normal.wav

@@ -47,7 +47,7 @@ public:
     AudioOutputMetrics resetAudioOutputMetrics();
     void setAudioOutputProcessor(AudioOutputProcessor processor, void* context);
     void setAudioOutputSkew(double skew);
-    void setPokemonBgmGateEnabled(bool enabled);
+    void setPokemonBgmGateDivisor(int divisor);
     bool takeScreenshot();
     void loadCheats(std::list<Cheat> cheats);
     int sendNetPacket(u8* data, int length);
