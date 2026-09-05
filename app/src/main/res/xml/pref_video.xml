@@ -28,6 +28,13 @@
             app:iconSpaceReserved="false"
             android:defaultValue="true" />
 
+    <SwitchPreference
+            android:key="enable_auto_widescreen"
+            android:title="@string/automatic_widescreen"
+            android:summary="@string/automatic_widescreen_summary"
+            app:iconSpaceReserved="false"
+            android:defaultValue="true" />
+
     <ListPreference
             android:key="video_filtering"
             android:title="@string/filter"

@@ -63,6 +63,8 @@ import me.magnum.melonds.domain.model.layout.LayoutComponent
 import me.magnum.melonds.domain.model.layout.ScreenFold
 import me.magnum.melonds.domain.model.rom.Rom
 import me.magnum.melonds.domain.model.ui.Orientation
+import me.magnum.melonds.domain.widescreen.AutoWidescreen
+import me.magnum.melonds.domain.widescreen.WidescreenTargetScreen
 import me.magnum.melonds.extensions.insetsControllerCompat
 import me.magnum.melonds.extensions.setLayoutOrientation
 import me.magnum.melonds.impl.emulator.LifecycleOwnerProvider
@@ -808,9 +810,20 @@ class EmulatorActivity : AppCompatActivity() {
         }
         val topView = binding.viewLayoutControls.getLayoutComponentView(topScreen)
         val bottomView = binding.viewLayoutControls.getLayoutComponentView(bottomScreen)
-        mainScreenRenderer.updateScreenAreas(
+        val widescreenProfile = viewModel.runtimeLayout.value?.autoWidescreenProfile
+        val topScreenRect = AutoWidescreen.screenRect(
             topView?.getRect(),
+            WidescreenTargetScreen.TOP,
+            widescreenProfile,
+        )
+        val bottomScreenRect = AutoWidescreen.screenRect(
             bottomView?.getRect(),
+            WidescreenTargetScreen.BOTTOM,
+            widescreenProfile,
+        )
+        mainScreenRenderer.updateScreenAreas(
+            topScreenRect,
+            bottomScreenRect,
             topView?.baseAlpha ?: 1f,
             bottomView?.baseAlpha ?: 1f,
             topView?.onTop ?: false,
@@ -818,7 +831,7 @@ class EmulatorActivity : AppCompatActivity() {
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val touchScreenArea = bottomView?.getRect()?.let {
+            val touchScreenArea = bottomScreenRect?.let {
                 val rect = android.graphics.Rect(it.x, it.y, it.right, it.bottom)
                 listOf(rect)
             }

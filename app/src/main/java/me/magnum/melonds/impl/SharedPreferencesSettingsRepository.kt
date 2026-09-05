@@ -180,6 +180,10 @@ class SharedPreferencesSettingsRepository(
         return speedMultiplierPreference.toFloat()
     }
 
+    override fun isAutoWidescreenEnabled(): Boolean {
+        return preferences.getBoolean("enable_auto_widescreen", true)
+    }
+
     override fun isRewindEnabled(): Boolean {
         return preferences.getBoolean("enable_rewind", false)
     }

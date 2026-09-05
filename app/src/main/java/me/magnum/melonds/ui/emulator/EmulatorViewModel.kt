@@ -67,6 +67,8 @@ import me.magnum.melonds.domain.repositories.RomsRepository
 import me.magnum.melonds.domain.repositories.SaveStatesRepository
 import me.magnum.melonds.domain.repositories.SettingsRepository
 import me.magnum.melonds.domain.services.EmulatorManager
+import me.magnum.melonds.domain.widescreen.AutoWidescreen
+import me.magnum.melonds.domain.widescreen.WidescreenProfile
 import me.magnum.melonds.impl.emulator.EmulatorSession
 import me.magnum.melonds.impl.layout.UILayoutProvider
 import me.magnum.melonds.ui.emulator.component.RetroAchievementsSubmissionHandler
@@ -116,6 +118,7 @@ class EmulatorViewModel @Inject constructor(
 
     private val sessionCoroutineScope = EmulatorSessionCoroutineScope()
     private var raSessionJob: Job? = null
+    private var activeWidescreenProfile: WidescreenProfile? = null
 
     private val _emulatorState = MutableStateFlow<EmulatorState>(EmulatorState.Uninitialized)
     val emulatorState = _emulatorState.asStateFlow()
@@ -197,7 +200,7 @@ class EmulatorViewModel @Inject constructor(
             is LaunchArgs.RomObject -> loadRom(args.rom)
             is LaunchArgs.RomUri -> loadRom(args.uri)
             is LaunchArgs.RomPath -> loadRom(args.path)
-            is LaunchArgs.Firmware -> _emulatorState.value = EmulatorState.ValidatingFirmware(args.consoleType)
+            is LaunchArgs.Firmware -> resetEmulatorState(EmulatorState.ValidatingFirmware(args.consoleType))
         }
     }
 
@@ -240,6 +243,12 @@ class EmulatorViewModel @Inject constructor(
 
     private suspend fun launchRom(rom: Rom) = coroutineScope {
         startEmulatorSession(EmulatorSession.SessionType.RomSession(rom))
+        val romInfo = getRomInfo(rom)
+        activeWidescreenProfile = AutoWidescreen.activate(
+            profile = romInfo?.let { AutoWidescreen.resolve(it) },
+            isEnabled = settingsRepository.isAutoWidescreenEnabled(),
+            isHardcoreModeEnabled = emulatorSession.isRetroAchievementsHardcoreModeEnabled,
+        )
         startObservingMainScreenBackground()
         startObservingSecondaryScreenBackground()
         startObservingRuntimeInputLayoutConfiguration()
@@ -249,7 +258,7 @@ class EmulatorViewModel @Inject constructor(
         startObservingLayoutForRom(rom)
         startRetroAchievementsSession(rom)
 
-        val cheats = getRomInfo(rom)?.let { getRomEnabledCheats(it) } ?: emptyList()
+        val cheats = romInfo?.let { getRomSessionCheats(it) } ?: emptyList()
         val result = emulatorManager.loadRom(rom, cheats)
         when (result) {
             is RomLaunchResult.LaunchFailedRomNotFound,
@@ -340,7 +349,7 @@ class EmulatorViewModel @Inject constructor(
 
         getRomInfo(rom)?.let {
             sessionCoroutineScope.launch {
-                val cheats = getRomEnabledCheats(it)
+                val cheats = getRomSessionCheats(it)
                 emulatorManager.updateCheats(cheats)
             }
         }
@@ -394,6 +403,7 @@ class EmulatorViewModel @Inject constructor(
     }
 
     private fun stopEmulator() {
+        clearAutoWidescreenSession()
         viewModelScope.launch {
             _achievementsEvent.emit(RAEventUi.Reset)
         }
@@ -402,6 +412,7 @@ class EmulatorViewModel @Inject constructor(
     }
 
     private fun stopEmulatorAndExit() {
+        clearAutoWidescreenSession()
         emulatorManager.stopEmulator()
         _uiEvent.tryEmit(EmulatorUiEvent.CloseEmulator)
     }
@@ -457,10 +468,7 @@ class EmulatorViewModel @Inject constructor(
                 when (option) {
                     FirmwarePauseMenuOption.SETTINGS -> _uiEvent.tryEmit(EmulatorUiEvent.OpenScreen.SettingsScreen)
                     FirmwarePauseMenuOption.RESET -> resetEmulator()
-                    FirmwarePauseMenuOption.EXIT -> {
-                        emulatorManager.stopEmulator()
-                        _uiEvent.tryEmit(EmulatorUiEvent.CloseEmulator)
-                    }
+                    FirmwarePauseMenuOption.EXIT -> stopEmulatorAndExit()
                 }
             }
         }
@@ -631,6 +639,7 @@ class EmulatorViewModel @Inject constructor(
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         layoutOrientation = layoutConfiguration.orientation,
                         layout = layout,
+                        autoWidescreenProfile = activeWidescreenProfile,
                     )
                 }
             }.collect(_runtimeLayout)
@@ -641,11 +650,17 @@ class EmulatorViewModel @Inject constructor(
         sessionCoroutineScope.notifyNewSessionStarted()
         emulatorSession.reset()
         raSessionJob = null
+        clearAutoWidescreenSession()
         _currentFps.value = null
         _emulatorState.value = newState
         _mainScreenBackground.value = RuntimeBackground.None
         _secondaryScreenBackground.value = RuntimeBackground.None
         _layout.value = null
+    }
+
+    private fun clearAutoWidescreenSession() {
+        activeWidescreenProfile = null
+        _runtimeLayout.value = null
     }
 
     private fun startObservingEmulatorEvents() {
@@ -789,6 +804,13 @@ class EmulatorViewModel @Inject constructor(
         }
 
         return cheatsRepository.getRomEnabledCheats(romInfo)
+    }
+
+    private suspend fun getRomSessionCheats(romInfo: RomInfo): List<Cheat> {
+        val userCheats = getRomEnabledCheats(romInfo)
+        return activeWidescreenProfile?.let {
+            userCheats + AutoWidescreen.toSessionCheat(it)
+        } ?: userCheats
     }
 
     private suspend fun getRomAchievementData(rom: Rom): GameAchievementData {

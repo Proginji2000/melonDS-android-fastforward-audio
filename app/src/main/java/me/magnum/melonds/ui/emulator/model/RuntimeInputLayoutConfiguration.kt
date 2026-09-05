@@ -3,6 +3,7 @@ package me.magnum.melonds.ui.emulator.model
 import me.magnum.melonds.domain.model.input.SoftInputBehaviour
 import me.magnum.melonds.domain.model.layout.LayoutConfiguration
 import me.magnum.melonds.domain.model.layout.UILayout
+import me.magnum.melonds.domain.widescreen.WidescreenProfile
 
 data class RuntimeInputLayoutConfiguration(
     val softInputBehaviour: SoftInputBehaviour,
@@ -10,4 +11,5 @@ data class RuntimeInputLayoutConfiguration(
     val isHapticFeedbackEnabled: Boolean,
     val layoutOrientation: LayoutConfiguration.LayoutOrientation,
     val layout: UILayout,
+    val autoWidescreenProfile: WidescreenProfile?,
 )

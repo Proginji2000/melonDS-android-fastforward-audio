@@ -7,8 +7,14 @@ import android.view.View
 import me.magnum.melonds.MelonEmulator.onScreenRelease
 import me.magnum.melonds.domain.model.Input
 import me.magnum.melonds.domain.model.Point
+import me.magnum.melonds.domain.model.Rect
+import me.magnum.melonds.domain.widescreen.AutoWidescreen
+import me.magnum.melonds.domain.widescreen.WidescreenRatio
 
-class TouchscreenInputHandler(inputListener: IInputListener) : BaseInputHandler(inputListener) {
+class TouchscreenInputHandler(
+    inputListener: IInputListener,
+    private val widescreenRatio: WidescreenRatio? = null,
+) : BaseInputHandler(inputListener) {
     private val touchPoint: Point = Point()
 
     @SuppressLint("ClickableViewAccessibility")
@@ -45,8 +51,19 @@ class TouchscreenInputHandler(inputListener: IInputListener) : BaseInputHandler(
         averageTouchX /= event.pointerCount
         averageTouchY /= event.pointerCount
 
-        touchPoint.x = (averageTouchX / viewWidth * 256).toInt().coerceIn(0, 255)
-        touchPoint.y = (averageTouchY / viewHeight * 192).toInt().coerceIn(0, 191)
+        val touchArea = widescreenRatio?.let {
+            AutoWidescreen.fitRect(Rect(0, 0, viewWidth, viewHeight), it)
+        }
+        if (touchArea == null) {
+            touchPoint.x = (averageTouchX / viewWidth * 256).toInt().coerceIn(0, 255)
+            touchPoint.y = (averageTouchY / viewHeight * 192).toInt().coerceIn(0, 191)
+            return touchPoint
+        }
+
+        touchPoint.x = ((averageTouchX - touchArea.x) / touchArea.width.coerceAtLeast(1) * 256)
+            .toInt().coerceIn(0, 255)
+        touchPoint.y = ((averageTouchY - touchArea.y) / touchArea.height.coerceAtLeast(1) * 192)
+            .toInt().coerceIn(0, 191)
         return touchPoint
     }
 }

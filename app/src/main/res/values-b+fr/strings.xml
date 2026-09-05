@@ -173,6 +173,8 @@
     <string name="threaded_rendering">Rendu fileté</string>
     <string name="fps_counter_position">Position du compteur FPS</string>
     <string name="threaded_rendering_summary">Ce paramètre améliore les performances des jeux en 3D lorsqu\'il est activé, mais peut provoquer des problèmes graphiques.</string>
+    <string name="automatic_widescreen">Widescreen automatique</string>
+    <string name="automatic_widescreen_summary">Applique automatiquement un patch widescreen aux jeux compatibles.</string>
     <string name="category_video">Vidéo</string>
     <string name="category_video_summary">Filtre, rendu fileté, compteur FPS</string>
     <string name="filter">Filtre</string>

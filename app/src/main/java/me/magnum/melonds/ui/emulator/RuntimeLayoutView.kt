@@ -9,6 +9,7 @@ import me.magnum.melonds.common.vibration.TouchVibrator
 import me.magnum.melonds.domain.model.Input
 import me.magnum.melonds.domain.model.input.SoftInputBehaviour
 import me.magnum.melonds.domain.model.layout.LayoutComponent
+import me.magnum.melonds.domain.widescreen.WidescreenTargetScreen
 import me.magnum.melonds.ui.common.LayoutView
 import me.magnum.melonds.ui.emulator.input.ButtonsInputHandler
 import me.magnum.melonds.ui.emulator.input.DpadInputHandler
@@ -127,8 +128,13 @@ class RuntimeLayoutView(context: Context, attrs: AttributeSet? = null) : LayoutV
         } else {
             LayoutComponent.BOTTOM_SCREEN to LayoutComponent.TOP_SCREEN
         }
+        val widescreenRatio = currentRuntimeLayout?.autoWidescreenProfile
+            ?.takeIf { it.targetScreen == WidescreenTargetScreen.BOTTOM }
+            ?.targetRatio
         systemInputHandler?.let {
-            getLayoutComponentView(touchScreenComponent)?.view?.setOnTouchListener(TouchscreenInputHandler(it))
+            getLayoutComponentView(touchScreenComponent)?.view?.setOnTouchListener(
+                TouchscreenInputHandler(it, widescreenRatio),
+            )
         }
         getLayoutComponentView(nonTouchScreenComponent)?.view?.setOnTouchListener(null)
     }

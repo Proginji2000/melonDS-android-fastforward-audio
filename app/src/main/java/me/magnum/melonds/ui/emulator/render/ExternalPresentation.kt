@@ -17,6 +17,9 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import me.magnum.melonds.domain.model.RuntimeBackground
 import me.magnum.melonds.domain.model.layout.LayoutComponent
+import me.magnum.melonds.domain.widescreen.AutoWidescreen
+import me.magnum.melonds.domain.widescreen.WidescreenProfile
+import me.magnum.melonds.domain.widescreen.WidescreenTargetScreen
 import me.magnum.melonds.ui.emulator.DSRenderer
 import me.magnum.melonds.ui.emulator.EmulatorSurfaceView
 import me.magnum.melonds.ui.emulator.RuntimeLayoutView
@@ -38,6 +41,7 @@ class ExternalPresentation(
     private val surfaceView: EmulatorSurfaceView
     private var currentBackground: RuntimeBackground? = null
     private var currentRendererConfiguration: RuntimeRendererConfiguration? = null
+    private var currentAutoWidescreenProfile: WidescreenProfile? = null
 
     init {
         window?.setFlags(
@@ -96,9 +100,19 @@ class ExternalPresentation(
         }
         val topView = layoutView.getLayoutComponentView(topScreen)
         val bottomView = layoutView.getLayoutComponentView(bottomScreen)
+        val topScreenRect = AutoWidescreen.screenRect(
+            topView?.getRect(),
+            WidescreenTargetScreen.TOP,
+            currentAutoWidescreenProfile,
+        )
+        val bottomScreenRect = AutoWidescreen.screenRect(
+            bottomView?.getRect(),
+            WidescreenTargetScreen.BOTTOM,
+            currentAutoWidescreenProfile,
+        )
         emulatorRenderer.updateScreenAreas(
-            topScreenRect = topView?.getRect(),
-            bottomScreenRect = bottomView?.getRect(),
+            topScreenRect = topScreenRect,
+            bottomScreenRect = bottomScreenRect,
             topAlpha = topView?.baseAlpha ?: 1f,
             bottomAlpha = bottomView?.baseAlpha ?: 1f,
             topOnTop = topView?.onTop ?: false,
@@ -106,7 +120,7 @@ class ExternalPresentation(
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val touchScreenArea = bottomView?.getRect()?.let {
+            val touchScreenArea = bottomScreenRect?.let {
                 val rect = android.graphics.Rect(it.x, it.y, it.right, it.bottom)
                 listOf(rect)
             }
@@ -127,6 +141,7 @@ class ExternalPresentation(
     }
 
     fun updateLayout(layoutConfiguration: RuntimeInputLayoutConfiguration) {
+        currentAutoWidescreenProfile = layoutConfiguration.autoWidescreenProfile
         layoutView.instantiateLayout(layoutConfiguration, LayoutTarget.SECONDARY_SCREEN)
         updateRendererScreenAreas()
     }
