@@ -26,6 +26,16 @@ class AutoWidescreenTest {
             "5211530C E59F205C " +
             "02115370 00001C71 " +
             "D2000000 00000000"
+    private val pokemonWhiteRom = RomInfo(
+        gameCode = "IRAF",
+        headerChecksum = 0x031EF208u,
+        gameTitle = "POKEMON W",
+        gameName = "Pokemon White Version",
+    )
+    private val expectedPokemonWhiteActionReplayCode =
+        "922822A8 00001555 " +
+            "122822A8 00001C72 " +
+            "D2000000 00000000"
 
     @Test
     fun superMario64DsEuropeV10IsResolved() {
@@ -78,6 +88,64 @@ class AutoWidescreenTest {
         assertNull(
             AutoWidescreen.activate(
                 superMarioProfile(),
+                isEnabled = true,
+                isHardcoreModeEnabled = true,
+            ),
+        )
+    }
+
+    @Test
+    fun pokemonWhiteFranceV10IsResolved() {
+        assertEquals("pokemon-white-fra-v1-0", pokemonWhiteProfile().id)
+    }
+
+    @Test
+    fun wrongChecksumDoesNotMatchPokemonWhiteProfile() {
+        assertNull(AutoWidescreen.resolve(pokemonWhiteRom.copy(headerChecksum = 0x031EF209u)))
+    }
+
+    @Test
+    fun wrongGameCodeDoesNotMatchPokemonWhiteProfile() {
+        assertNull(AutoWidescreen.resolve(pokemonWhiteRom.copy(gameCode = "IRAE")))
+    }
+
+    @Test
+    fun twilightBinarySuffixDoesNotMatchPokemonWhiteHeaderChecksum() {
+        assertNull(AutoWidescreen.resolve(pokemonWhiteRom.copy(headerChecksum = 0x0000BC1Du)))
+    }
+
+    @Test
+    fun pokemonWhiteProfileUses16By9OnPhysicalTopScreen() {
+        assertEquals(WidescreenRatio.RATIO_16_9, pokemonWhiteProfile().targetRatio)
+        assertEquals(WidescreenTargetScreen.TOP, pokemonWhiteProfile().targetScreen)
+    }
+
+    @Test
+    fun pokemonWhiteActionReplayCodeIsAccepted() {
+        assertTrue(AutoWidescreen.isActionReplayCodeValid(pokemonWhiteProfile().actionReplayCode))
+    }
+
+    @Test
+    fun pokemonWhiteActionReplayCodeKeepsExactOrderAndContents() {
+        assertEquals(expectedPokemonWhiteActionReplayCode, pokemonWhiteProfile().actionReplayCode)
+    }
+
+    @Test
+    fun disabledSettingDoesNotActivatePokemonWhiteProfile() {
+        assertNull(
+            AutoWidescreen.activate(
+                pokemonWhiteProfile(),
+                isEnabled = false,
+                isHardcoreModeEnabled = false,
+            ),
+        )
+    }
+
+    @Test
+    fun hardcoreDoesNotActivatePokemonWhiteProfile() {
+        assertNull(
+            AutoWidescreen.activate(
+                pokemonWhiteProfile(),
                 isEnabled = true,
                 isHardcoreModeEnabled = true,
             ),
@@ -186,5 +254,9 @@ class AutoWidescreenTest {
 
     private fun superMarioProfile(): WidescreenProfile {
         return requireNotNull(AutoWidescreen.resolve(superMarioRom))
+    }
+
+    private fun pokemonWhiteProfile(): WidescreenProfile {
+        return requireNotNull(AutoWidescreen.resolve(pokemonWhiteRom))
     }
 }
