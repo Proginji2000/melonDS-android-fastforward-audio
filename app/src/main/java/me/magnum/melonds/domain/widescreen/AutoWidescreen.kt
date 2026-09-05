@@ -28,7 +28,28 @@ data class WidescreenProfile(
 )
 
 object AutoWidescreen {
-    private val profiles = emptyList<WidescreenProfile>()
+    private val profiles = listOf(
+        // Super Mario 64 DS, Europe v1.0; AR Game ID ASMP-D3D9F14A; 16:9, physical TOP.
+        // Code provenance: DeSmuME forum "Widescreen Codes" thread and its Europe AR list;
+        // the ROM ID ASMP-D3D9F14A is also documented by shocoman's project.
+        WidescreenProfile(
+            id = "super-mario-64-ds-eur-v1-0",
+            romKey = WidescreenRomKey("ASMP", 0xD3D9F14Au),
+            targetRatio = WidescreenRatio.RATIO_16_9,
+            targetScreen = WidescreenTargetScreen.TOP,
+            actionReplayCode =
+                "520209C4 E59D0094 " +
+                    "020209C8 E3A09C15 " +
+                    "0200D03C 00001C71 " +
+                    "D2000000 00000000 " +
+                    "520B21E8 E59F00E8 " +
+                    "020B227C E3A02B07 " +
+                    "D2000000 00000000 " +
+                    "5211530C E59F205C " +
+                    "02115370 00001C71 " +
+                    "D2000000 00000000",
+        ),
+    )
     private val actionReplayCodePattern =
         Regex("^(?:[0-9A-Fa-f]{8} [0-9A-Fa-f]{8})(?: [0-9A-Fa-f]{8} [0-9A-Fa-f]{8})*$")
 

@@ -1,6 +1,7 @@
 package me.magnum.melonds.ui.emulator
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import me.magnum.melonds.BuildConfig
 import me.magnum.melonds.MelonEmulator
 import me.magnum.melonds.common.romprocessors.RomFileProcessorFactory
 import me.magnum.melonds.common.runtime.ScreenshotFrameBufferProvider
@@ -96,6 +98,8 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+
+private const val AUTO_WIDESCREEN_LOG_TAG = "AutoWidescreen"
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -244,11 +248,13 @@ class EmulatorViewModel @Inject constructor(
     private suspend fun launchRom(rom: Rom) = coroutineScope {
         startEmulatorSession(EmulatorSession.SessionType.RomSession(rom))
         val romInfo = getRomInfo(rom)
+        val resolvedWidescreenProfile = romInfo?.let { AutoWidescreen.resolve(it) }
         activeWidescreenProfile = AutoWidescreen.activate(
-            profile = romInfo?.let { AutoWidescreen.resolve(it) },
+            profile = resolvedWidescreenProfile,
             isEnabled = settingsRepository.isAutoWidescreenEnabled(),
             isHardcoreModeEnabled = emulatorSession.isRetroAchievementsHardcoreModeEnabled,
         )
+        logAutoWidescreenResolution(romInfo, resolvedWidescreenProfile, activeWidescreenProfile)
         startObservingMainScreenBackground()
         startObservingSecondaryScreenBackground()
         startObservingRuntimeInputLayoutConfiguration()
@@ -784,6 +790,29 @@ class EmulatorViewModel @Inject constructor(
     private fun getRomInfo(rom: Rom): RomInfo? {
         val fileRomProcessor = romFileProcessorFactory.getFileRomProcessorForDocument(rom.uri)
         return fileRomProcessor?.getRomInfo(rom)
+    }
+
+    private fun logAutoWidescreenResolution(
+        romInfo: RomInfo?,
+        resolvedProfile: WidescreenProfile?,
+        activeProfile: WidescreenProfile?,
+    ) {
+        if (!BuildConfig.DEBUG || romInfo == null) {
+            return
+        }
+
+        val profileDetails = resolvedProfile?.let {
+            "profile=${it.id}\n" +
+                "ratio=${it.targetRatio.width}:${it.targetRatio.height}\n" +
+                "screen=${it.targetScreen}\n" +
+                "active=${activeProfile != null}"
+        } ?: "profile=none"
+        Log.d(
+            AUTO_WIDESCREEN_LOG_TAG,
+            "gameCode=${romInfo.gameCode}\n" +
+                "headerChecksum=${romInfo.headerChecksumString()}\n" +
+                profileDetails,
+        )
     }
 
     private fun getRomSaveStateSlots(rom: Rom): List<SaveStateSlot> {

@@ -9,68 +9,113 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutoWidescreenTest {
-    // All metadata and AR words in this test are synthetic and never enter production.
-    private val validCode = "12345678 9ABCDEF0"
-    private val profile = WidescreenProfile(
-        id = "synthetic-16-9",
-        romKey = WidescreenRomKey("TEST", 0x12345678u),
-        targetRatio = WidescreenRatio.RATIO_16_9,
-        targetScreen = WidescreenTargetScreen.TOP,
-        actionReplayCode = validCode,
+    private val superMarioRom = RomInfo(
+        gameCode = "ASMP",
+        headerChecksum = 0xD3D9F14Au,
+        gameTitle = "SUPER MARIO 64 DS",
+        gameName = "Super Mario 64 DS",
     )
+    private val expectedSuperMarioActionReplayCode =
+        "520209C4 E59D0094 " +
+            "020209C8 E3A09C15 " +
+            "0200D03C 00001C71 " +
+            "D2000000 00000000 " +
+            "520B21E8 E59F00E8 " +
+            "020B227C E3A02B07 " +
+            "D2000000 00000000 " +
+            "5211530C E59F205C " +
+            "02115370 00001C71 " +
+            "D2000000 00000000"
 
     @Test
-    fun exactRomIsResolved() {
-        assertEquals(profile, AutoWidescreen.resolve(romInfo(), listOf(profile)))
+    fun superMario64DsEuropeV10IsResolved() {
+        assertEquals("super-mario-64-ds-eur-v1-0", superMarioProfile().id)
     }
 
     @Test
-    fun wrongChecksumIsNotResolved() {
-        assertNull(AutoWidescreen.resolve(romInfo(checksum = 0x87654321u), listOf(profile)))
+    fun wholeRomChecksumDoesNotMatchSuperMarioProfile() {
+        assertNull(AutoWidescreen.resolve(superMarioRom.copy(headerChecksum = 0x29715DECu)))
     }
 
     @Test
-    fun wrongGameCodeIsNotResolved() {
-        assertNull(AutoWidescreen.resolve(romInfo(gameCode = "FAIL"), listOf(profile)))
+    fun gameCodeMatchingIsCaseSensitive() {
+        assertNull(AutoWidescreen.resolve(superMarioRom.copy(gameCode = "asmp")))
     }
 
     @Test
-    fun productionRegistryIsEmpty() {
-        assertNull(AutoWidescreen.resolve(romInfo()))
+    fun superMarioProfileUses16By9() {
+        assertEquals(WidescreenRatio.RATIO_16_9, superMarioProfile().targetRatio)
     }
 
     @Test
-    fun disabledSettingDoesNotActivateProfile() {
-        assertNull(AutoWidescreen.activate(profile, isEnabled = false, isHardcoreModeEnabled = false))
+    fun superMarioProfileTargetsPhysicalTopScreen() {
+        assertEquals(WidescreenTargetScreen.TOP, superMarioProfile().targetScreen)
     }
 
     @Test
-    fun hardcoreDoesNotActivateProfile() {
-        assertNull(AutoWidescreen.activate(profile, isEnabled = true, isHardcoreModeEnabled = true))
+    fun superMarioActionReplayCodeIsAccepted() {
+        assertTrue(AutoWidescreen.isActionReplayCodeValid(superMarioProfile().actionReplayCode))
     }
 
     @Test
-    fun actionReplayCodeRequiresCanonicalHexPairs() {
-        assertTrue(AutoWidescreen.isActionReplayCodeValid(validCode))
-        assertTrue(AutoWidescreen.isActionReplayCodeValid("12345678 9ABCDEF0 00000000 FFFFFFFF"))
-        assertFalse(AutoWidescreen.isActionReplayCodeValid("12345678"))
-        assertFalse(AutoWidescreen.isActionReplayCodeValid("1234567G 9ABCDEF0"))
-        assertFalse(AutoWidescreen.isActionReplayCodeValid("12345678  9ABCDEF0"))
+    fun superMarioActionReplayCodeKeepsExactOrderAndContents() {
+        assertEquals(expectedSuperMarioActionReplayCode, superMarioProfile().actionReplayCode)
+    }
+
+    @Test
+    fun disabledSettingDoesNotActivateSuperMarioProfile() {
         assertNull(
             AutoWidescreen.activate(
-                profile.copy(actionReplayCode = "12345678"),
-                isEnabled = true,
+                superMarioProfile(),
+                isEnabled = false,
                 isHardcoreModeEnabled = false,
             ),
         )
     }
 
     @Test
-    fun ratio16By9FitsInsideExistingRect() {
-        assertEquals(
-            Rect(0, 24, 256, 144),
-            AutoWidescreen.fitRect(Rect(0, 0, 256, 192), WidescreenRatio.RATIO_16_9),
+    fun hardcoreDoesNotActivateSuperMarioProfile() {
+        assertNull(
+            AutoWidescreen.activate(
+                superMarioProfile(),
+                isEnabled = true,
+                isHardcoreModeEnabled = true,
+            ),
         )
+    }
+
+    @Test
+    fun unknownRomLeavesSessionAndRectUnchanged() {
+        val originalRect = Rect(10, 20, 256, 192)
+        val resolved = AutoWidescreen.resolve(superMarioRom.copy(gameCode = "NONE"))
+        val active = AutoWidescreen.activate(
+            resolved,
+            isEnabled = true,
+            isHardcoreModeEnabled = false,
+        )
+
+        assertNull(active)
+        assertEquals(
+            originalRect,
+            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.TOP, active),
+        )
+    }
+
+    @Test
+    fun actionReplayCodeRejectsNonCanonicalInput() {
+        assertFalse(AutoWidescreen.isActionReplayCodeValid("12345678"))
+        assertFalse(AutoWidescreen.isActionReplayCodeValid("1234567G 9ABCDEF0"))
+        assertFalse(AutoWidescreen.isActionReplayCodeValid("12345678  9ABCDEF0"))
+    }
+
+    @Test
+    fun ratio16By9FitsCenteredInsideExistingRect() {
+        val originalRect = Rect(0, 0, 256, 192)
+        val fittedRect = AutoWidescreen.fitRect(originalRect, WidescreenRatio.RATIO_16_9)
+
+        assertEquals(Rect(0, 24, 256, 144), fittedRect)
+        assertTrue(originalRect.contains(fittedRect))
+        assertEquals(Rect(0, 0, 256, 192), originalRect)
     }
 
     @Test
@@ -82,47 +127,64 @@ class AutoWidescreenTest {
     }
 
     @Test
+    fun matchingRatioRemainsUnchanged() {
+        val originalRect = Rect(8, 12, 320, 180)
+        assertEquals(originalRect, AutoWidescreen.fitRect(originalRect, WidescreenRatio.RATIO_16_9))
+    }
+
+    @Test
     fun ratioOnlyAppliesToTargetPhysicalScreen() {
         val originalRect = Rect(0, 0, 256, 192)
 
         assertEquals(
             Rect(0, 24, 256, 144),
-            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.TOP, profile),
+            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.TOP, superMarioProfile()),
         )
         assertEquals(
             originalRect,
-            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.BOTTOM, profile),
+            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.BOTTOM, superMarioProfile()),
         )
     }
 
     @Test
-    fun unsupportedRomLeavesSessionAndRectUnchanged() {
-        val originalRect = Rect(10, 20, 256, 192)
-        val resolved = AutoWidescreen.resolve(romInfo(gameCode = "NONE"), listOf(profile))
-        val active = AutoWidescreen.activate(resolved, isEnabled = true, isHardcoreModeEnabled = false)
+    fun physicalTopWidescreenFollowsSwappedLayoutSlot() {
+        val topLayoutSlot = Rect(0, 0, 256, 192)
+        val bottomLayoutSlot = Rect(300, 0, 400, 300)
 
-        assertNull(active)
-        assertEquals(
-            originalRect,
-            AutoWidescreen.screenRect(originalRect, WidescreenTargetScreen.TOP, active),
+        // After screen swap, the bottom layout slot displays the physical top screen.
+        val physicalTopRect = AutoWidescreen.screenRect(
+            bottomLayoutSlot,
+            WidescreenTargetScreen.TOP,
+            superMarioProfile(),
         )
+        val physicalBottomRect = AutoWidescreen.screenRect(
+            topLayoutSlot,
+            WidescreenTargetScreen.BOTTOM,
+            superMarioProfile(),
+        )
+
+        assertEquals(Rect(300, 37, 400, 225), physicalTopRect)
+        assertEquals(topLayoutSlot, physicalBottomRect)
     }
 
     @Test
     fun activeProfileProducesOnlyAnEphemeralCheat() {
-        val active = AutoWidescreen.activate(profile, isEnabled = true, isHardcoreModeEnabled = false)!!
-        val cheat = AutoWidescreen.toSessionCheat(active)
+        val activeProfile = requireNotNull(
+            AutoWidescreen.activate(
+                superMarioProfile(),
+                isEnabled = true,
+                isHardcoreModeEnabled = false,
+            ),
+        )
+        val cheat = AutoWidescreen.toSessionCheat(activeProfile)
 
         assertNull(cheat.id)
         assertEquals(0, cheat.cheatDatabaseId)
-        assertEquals(validCode, cheat.code)
+        assertEquals(expectedSuperMarioActionReplayCode, cheat.code)
         assertTrue(cheat.enabled)
     }
 
-    private fun romInfo(
-        gameCode: String = "TEST",
-        checksum: UInt = 0x12345678u,
-    ): RomInfo {
-        return RomInfo(gameCode, checksum, "Synthetic", "Synthetic")
+    private fun superMarioProfile(): WidescreenProfile {
+        return requireNotNull(AutoWidescreen.resolve(superMarioRom))
     }
 }
