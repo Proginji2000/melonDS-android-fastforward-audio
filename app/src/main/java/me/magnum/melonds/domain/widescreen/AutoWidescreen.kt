@@ -28,52 +28,13 @@ data class WidescreenProfile(
 )
 
 object AutoWidescreen {
-    private val profiles = listOf(
-        // Super Mario 64 DS, Europe v1.0; AR Game ID ASMP-D3D9F14A; 16:9, physical TOP.
-        // Code provenance: DeSmuME forum "Widescreen Codes" thread and its Europe AR list;
-        // the ROM ID ASMP-D3D9F14A is also documented by shocoman's project.
-        WidescreenProfile(
-            id = "super-mario-64-ds-eur-v1-0",
-            romKey = WidescreenRomKey("ASMP", 0xD3D9F14Au),
-            targetRatio = WidescreenRatio.RATIO_16_9,
-            targetScreen = WidescreenTargetScreen.TOP,
-            actionReplayCode =
-                "520209C4 E59D0094 " +
-                    "020209C8 E3A09C15 " +
-                    "0200D03C 00001C71 " +
-                    "D2000000 00000000 " +
-                    "520B21E8 E59F00E8 " +
-                    "020B227C E3A02B07 " +
-                    "D2000000 00000000 " +
-                    "5211530C E59F205C " +
-                    "02115370 00001C71 " +
-                    "D2000000 00000000",
-        ),
-        // Pokemon White, France v1.0; AR Game ID IRAF-031EF208; 16:9, physical TOP.
-        // Derived from TWiLight Menu++ v27.24.1 IRAF-BC1D.bin: its 16:10 ratio value
-        // 0x199A is deliberately replaced with the Q12 16:9 value 0x1C72 for this patch only.
-        WidescreenProfile(
-            id = "pokemon-white-fra-v1-0",
-            romKey = WidescreenRomKey("IRAF", 0x031EF208u),
-            targetRatio = WidescreenRatio.RATIO_16_9,
-            targetScreen = WidescreenTargetScreen.TOP,
-            actionReplayCode =
-                "922822A8 00001555 " +
-                    "122822A8 00001C72 " +
-                    "D2000000 00000000",
-        ),
-    )
     private val actionReplayCodePattern =
         Regex("^(?:[0-9A-Fa-f]{8} [0-9A-Fa-f]{8})(?: [0-9A-Fa-f]{8} [0-9A-Fa-f]{8})*$")
 
-    fun resolve(romInfo: RomInfo): WidescreenProfile? = resolve(romInfo, profiles)
-
-    internal fun resolve(
-        romInfo: RomInfo,
-        registry: List<WidescreenProfile>,
-    ): WidescreenProfile? {
-        val romKey = WidescreenRomKey(romInfo.gameCode, romInfo.headerChecksum)
-        return registry.singleOrNull { it.romKey == romKey }
+    fun resolve(romInfo: RomInfo): WidescreenProfile? {
+        return GeneratedWidescreenProfiles.profiles[
+            WidescreenRomKey(romInfo.gameCode, romInfo.headerChecksum),
+        ]
     }
 
     fun activate(

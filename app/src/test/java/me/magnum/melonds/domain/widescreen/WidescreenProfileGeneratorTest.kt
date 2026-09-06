@@ -40,6 +40,29 @@ class WidescreenProfileGeneratorTest {
     }
 
     @Test
+    fun invalidApprovedManifestFailsWithoutAcceptingStaleOutput() {
+        val directory = temporaryFolder.newFolder("stale-output").toPath()
+        val output = generateFromFiles(directory)
+        val validOutput = Files.readAllBytes(output)
+        val profiles = directory.resolve("widescreen_profiles.json")
+        val invalidProfilesJson = profilesJson.replaceFirst(
+            "\"ar\": \"SUPPORTED\"",
+            "\"ar\": \"UNSUPPORTED\"",
+        )
+        assertFalse(invalidProfilesJson == profilesJson)
+        Files.write(profiles, invalidProfilesJson.toByteArray(UTF_8))
+
+        assertGenerationRejected("AR capability mismatch") {
+            WidescreenProfileGenerator.write(
+                directory.resolve("widescreen_sources.json"),
+                profiles,
+                output,
+            )
+        }
+        assertArrayEquals(validOutput, Files.readAllBytes(output))
+    }
+
+    @Test
     fun thousandApprovedProfilesUseBoundedDeterministicChunks() {
         val template = canonical.profiles.profiles.first()
         val profiles = (0 until 1_000).map { index ->

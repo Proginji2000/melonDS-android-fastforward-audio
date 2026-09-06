@@ -2,6 +2,7 @@ package me.magnum.melonds.domain.widescreen
 
 import me.magnum.melonds.domain.model.RomInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -49,14 +50,10 @@ class WidescreenManifestTest {
     }
 
     @Test
-    fun canonicalProfilesExactlyMatchCurrentRuntimeProfiles() {
-        val runtimeProfiles = currentRuntimeProfiles()
+    fun canonicalProfilesExactlyMatchGeneratedRuntimeRegistry() {
         val generatedProfiles = GeneratedWidescreenProfiles.profiles.values.toList()
         assertEquals(2, canonical.profiles.profiles.size)
-        assertEquals(
-            canonical.profiles.profiles.map { it.id },
-            runtimeProfiles.map { it.id },
-        )
+        assertEquals(2, GeneratedWidescreenProfiles.profiles.size)
         assertEquals(
             canonical.profiles.profiles.map { it.id },
             generatedProfiles.map { it.id },
@@ -87,7 +84,7 @@ class WidescreenManifestTest {
             assertEquals(expected.targetScreen.toRuntimeTargetScreen(), runtime.targetScreen)
             assertEquals(expectedActionReplayCode, runtime.actionReplayCode)
             assertEquals(expectedActionReplayCode, generated.actionReplayCode)
-            assertEquals(runtime, generated)
+            assertSame(generated, runtime)
         }
     }
 
@@ -434,14 +431,6 @@ class WidescreenManifestTest {
             CanonicalTargetScreen.TOP -> WidescreenTargetScreen.TOP
             CanonicalTargetScreen.BOTTOM -> WidescreenTargetScreen.BOTTOM
             CanonicalTargetScreen.UNRESOLVED -> error("UNRESOLVED target cannot match runtime")
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun currentRuntimeProfiles(): List<WidescreenProfile> {
-        return AutoWidescreen::class.java.getDeclaredField("profiles").let { field ->
-            field.isAccessible = true
-            field.get(AutoWidescreen) as List<WidescreenProfile>
         }
     }
 
