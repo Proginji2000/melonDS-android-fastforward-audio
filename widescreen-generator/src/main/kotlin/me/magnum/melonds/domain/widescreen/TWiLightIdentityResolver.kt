@@ -32,7 +32,7 @@ const val USRCHEAT_ARTIFACT_LICENSE = "NOASSERTION"
 private const val PINNED_TWILIGHT_CANDIDATES_SHA256 =
     "ccb1d0c2177df73653224716017364c1d9fbbf3d667425fa799fe70f7af5d000"
 private const val TWILIGHT_UPSTREAM_IDENTITY_NAMESPACE = "TWILIGHT_WIDESCREEN_FILENAME_V1"
-private val GAME_CODE_PATTERN = Regex("^[A-Z0-9]{4}$")
+internal val GAME_CODE_PATTERN = Regex("^[A-Z0-9]{4}$")
 private val CHECKSUM16_PATTERN = Regex("^[0-9A-F]{4}$")
 private val CHECKSUM32_PATTERN = Regex("^[0-9A-F]{8}$")
 
@@ -212,7 +212,27 @@ data class TWiLightIdentityRunMetrics(
     val usrcheatParsingMillis: Double,
     val joinMillis: Double,
     val evidenceResolutionMillis: Double,
+    val evidenceMergeMillis: Double,
+    val resolverTotalMillis: Double,
     val totalMillis: Double,
+)
+
+data class LocalRomResolutionStats(
+    val localEvidenceUniqueCount: Int,
+    val localEvidenceMatchingTWiLightCount: Int,
+    val localEvidenceWithoutTWiLightCandidateCount: Int,
+    val localEvidenceAbsentFromUsrcheatCount: Int,
+    val newlyResolvedCandidateCount: Int,
+    val newlyResolvedSupportedCount: Int,
+    val conflictCandidateCount: Int,
+)
+
+data class LocalRomIdentityRunResult(
+    val evidencePath: Path,
+    val evidenceSizeBytes: Long,
+    val evidenceSha256: String,
+    val scan: LocalRomScanResult,
+    val resolutionStats: LocalRomResolutionStats,
 )
 
 data class TWiLightIdentityRunResult(
@@ -227,6 +247,7 @@ data class TWiLightIdentityRunResult(
     val summarySha256: String,
     val summary: TWiLightIdentitySummary,
     val metrics: TWiLightIdentityRunMetrics,
+    val localRom: LocalRomIdentityRunResult?,
 )
 
 object UsrcheatDatParser {
@@ -578,12 +599,22 @@ object TWiLightIdentityResolutionRunner {
         prettyPrintIndent = "  "
     }
 
+    fun mergeEvidence(
+        runtimeEvidence: List<IdentityEvidenceRecord>,
+        localScan: LocalRomScanResult?,
+    ): List<IdentityEvidenceRecord> = if (localScan == null) {
+        runtimeEvidence
+    } else {
+        runtimeEvidence + localScan.evidenceRecords
+    }
+
     fun run(
         usrcheatPath: Path,
         twilightCandidatesPath: Path,
         widescreenSourcesPath: Path,
         widescreenProfilesPath: Path,
         outputDirectory: Path,
+        localRomDirectory: Path? = null,
     ): TWiLightIdentityRunResult {
         val totalStart = System.nanoTime()
         require(Files.isRegularFile(usrcheatPath)) { "Missing pinned usrcheat artifact: $usrcheatPath" }
@@ -605,10 +636,14 @@ object TWiLightIdentityResolutionRunner {
 
         val sourcesBytes = Files.readAllBytes(widescreenSourcesPath)
         val profilesBytes = Files.readAllBytes(widescreenProfilesPath)
-        val evidence = TWiLightIdentityResolver.runtimeObservedEvidence(
+        val runtimeEvidence = TWiLightIdentityResolver.runtimeObservedEvidence(
             String(sourcesBytes, UTF_8),
             String(profilesBytes, UTF_8),
         )
+        val localScan = localRomDirectory?.let(LocalRomIdentityScanner::scan)
+        val mergeStart = System.nanoTime()
+        val evidence = mergeEvidence(runtimeEvidence, localScan)
+        val mergeNanos = System.nanoTime() - mergeStart
 
         val parseStart = System.nanoTime()
         val usrcheatIndex = UsrcheatDatParser.parse(usrcheatPath)
@@ -616,9 +651,14 @@ object TWiLightIdentityResolutionRunner {
         val joinStart = System.nanoTime()
         val joined = TWiLightIdentityResolver.join(candidatesDocument.candidates, usrcheatIndex)
         val joinNanos = System.nanoTime() - joinStart
+        val resolverStart = System.nanoTime()
+        val baselineResolutions = localScan?.let {
+            TWiLightIdentityResolver.resolve(joined, runtimeEvidence)
+        }
         val evidenceStart = System.nanoTime()
         val resolutions = TWiLightIdentityResolver.resolve(joined, evidence)
         val evidenceNanos = System.nanoTime() - evidenceStart
+        val resolverNanos = System.nanoTime() - resolverStart
 
         val usrcheatSource = UsrcheatSource()
         val usrcheatArtifact = IdentityArtifactReference(
@@ -661,11 +701,18 @@ object TWiLightIdentityResolutionRunner {
         val pokemon = resolutions.singleOrNull {
             it.upstreamTid == "IRAF" && it.upstreamHeaderCrc16 == "BC1D"
         } ?: error("Pinned TWiLight candidates must contain exactly one IRAF/BC1D sentinel")
-        require(
-            pokemon.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED &&
-                pokemon.resolvedHeaderChecksum32 == "031EF208" &&
-                pokemon.evidence.any { it.type == IdentityEvidenceType.RUNTIME_OBSERVED },
-        ) { "IRAF/BC1D runtime evidence sentinel did not resolve exactly" }
+        val pokemonRuntimeSentinelPresent = pokemon.evidence.any {
+            it.type == IdentityEvidenceType.RUNTIME_OBSERVED && it.headerChecksum32 == "031EF208"
+        }
+        if (localScan == null) {
+            require(
+                pokemon.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED &&
+                    pokemon.resolvedHeaderChecksum32 == "031EF208" &&
+                    pokemonRuntimeSentinelPresent,
+            ) { "IRAF/BC1D runtime evidence sentinel did not resolve exactly" }
+        } else {
+            require(pokemonRuntimeSentinelPresent) { "IRAF/BC1D runtime evidence sentinel is missing" }
+        }
 
         Files.createDirectories(outputDirectory)
         val identitiesPath = outputDirectory.resolve(USRCHEAT_IDENTITIES_FILENAME)
@@ -674,6 +721,51 @@ object TWiLightIdentityResolutionRunner {
         Files.write(identitiesPath, artifacts.usrcheatIdentitiesBytes)
         Files.write(resolutionPath, artifacts.resolutionBytes)
         Files.write(summaryPath, artifacts.summaryBytes)
+        val localRomResult = localScan?.let { scan ->
+            val evidencePath = outputDirectory.resolve(LocalRomIdentityScanner.EVIDENCE_FILENAME)
+            Files.write(evidencePath, scan.evidenceBytes)
+            val exactCandidateKeys = candidatesDocument.candidates.asSequence()
+                .filterNot { it.upstreamWildcard }
+                .mapNotNull { candidate ->
+                    val gameCode = candidate.upstreamTid ?: return@mapNotNull null
+                    val crc16 = candidate.upstreamHeaderCrc16 ?: return@mapNotNull null
+                    gameCode to crc16
+                }
+                .toSet()
+            val baselineByPath = requireNotNull(baselineResolutions).associateBy { it.sourceCandidatePath }
+            val newlyResolvedPaths = resolutions.asSequence()
+                .filter { it.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED }
+                .filter { baselineByPath.getValue(it.sourceCandidatePath).runtimeIdentityStatus != ResolvedRuntimeIdentityStatus.RESOLVED }
+                .map { it.sourceCandidatePath }
+                .toSet()
+            val supportedPaths = candidatesDocument.candidates.asSequence()
+                .filter { it.arValidationStatus == "SUPPORTED" }
+                .map { it.sourcePath }
+                .toSet()
+            LocalRomIdentityRunResult(
+                evidencePath = evidencePath,
+                evidenceSizeBytes = scan.evidenceBytes.size.toLong(),
+                evidenceSha256 = sha256(scan.evidenceBytes),
+                scan = scan,
+                resolutionStats = LocalRomResolutionStats(
+                    localEvidenceUniqueCount = scan.evidenceRecords.size,
+                    localEvidenceMatchingTWiLightCount = scan.evidenceRecords.count {
+                        it.gameCode to it.upstreamHeaderCrc16 in exactCandidateKeys
+                    },
+                    localEvidenceWithoutTWiLightCandidateCount = scan.evidenceRecords.count {
+                        it.gameCode to it.upstreamHeaderCrc16 !in exactCandidateKeys
+                    },
+                    localEvidenceAbsentFromUsrcheatCount = scan.evidenceRecords.count {
+                        it.headerChecksum32 !in usrcheatIndex.checksumsByGameCode[it.gameCode].orEmpty()
+                    },
+                    newlyResolvedCandidateCount = newlyResolvedPaths.size,
+                    newlyResolvedSupportedCount = newlyResolvedPaths.count { it in supportedPaths },
+                    conflictCandidateCount = resolutions.count {
+                        it.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.CONFLICT
+                    },
+                ),
+            )
+        }
         val summary = json.decodeFromString<TWiLightIdentitySummary>(String(artifacts.summaryBytes, UTF_8))
         return TWiLightIdentityRunResult(
             usrcheatIdentitiesPath = identitiesPath,
@@ -690,8 +782,11 @@ object TWiLightIdentityResolutionRunner {
                 usrcheatParsingMillis = parseNanos.toMillis(),
                 joinMillis = joinNanos.toMillis(),
                 evidenceResolutionMillis = evidenceNanos.toMillis(),
+                evidenceMergeMillis = mergeNanos.toMillis(),
+                resolverTotalMillis = resolverNanos.toMillis(),
                 totalMillis = (System.nanoTime() - totalStart).toMillis(),
             ),
+            localRom = localRomResult,
         )
     }
 }
@@ -699,9 +794,10 @@ object TWiLightIdentityResolutionRunner {
 object TWiLightIdentityResolverMain {
     @JvmStatic
     fun main(args: Array<String>) {
-        require(args.size == 5) {
+        require(args.size in 5..6) {
             "Usage: TWiLightIdentityResolverMain <usrcheat.dat> <TWiLight candidates JSON> " +
-                "<widescreen sources JSON> <widescreen profiles JSON> <output directory>"
+                "<widescreen sources JSON> <widescreen profiles JSON> <output directory> " +
+                "[local ROM directory]"
         }
         val result = TWiLightIdentityResolutionRunner.run(
             usrcheatPath = Path.of(args[0]),
@@ -709,6 +805,7 @@ object TWiLightIdentityResolverMain {
             widescreenSourcesPath = Path.of(args[2]),
             widescreenProfilesPath = Path.of(args[3]),
             outputDirectory = Path.of(args[4]),
+            localRomDirectory = args.getOrNull(5)?.let { Path.of(it) },
         )
         println(
             "Identity resolution: usrcheat=${result.summary.usrcheatCounts.entryCount}, " +
@@ -718,6 +815,39 @@ object TWiLightIdentityResolverMain {
         println(result.usrcheatIdentitiesPath.describe(result.usrcheatIdentitiesSizeBytes, result.usrcheatIdentitiesSha256))
         println(result.resolutionPath.describe(result.resolutionSizeBytes, result.resolutionSha256))
         println(result.summaryPath.describe(result.summarySizeBytes, result.summarySha256))
+        result.localRom?.let { local ->
+            val scan = local.scan.stats
+            val resolution = local.resolutionStats
+            println(local.evidencePath.describe(local.evidenceSizeBytes, local.evidenceSha256))
+            println(
+                "Local ROM scan: filesDiscovered=${scan.filesDiscovered}, filesAccepted=${scan.filesAccepted}, " +
+                    "filesTooSmall=${scan.filesTooSmall}, filesInvalidHeader=${scan.filesInvalidHeader}, " +
+                    "filesDuplicateIdentity=${scan.duplicateLocalEvidenceCount}, " +
+                    "duplicateLocalEvidenceCount=${scan.duplicateLocalEvidenceCount}, " +
+                    "wildcardsIgnored=${scan.wildcardIdentityCount}",
+            )
+            println(
+                "Local evidence: localRomFilesScanned=${scan.filesAccepted}, " +
+                    "localEvidenceRecords=${resolution.localEvidenceUniqueCount}, " +
+                    "localEvidenceMatchingTWiLight=${resolution.localEvidenceMatchingTWiLightCount}, " +
+                    "localEvidenceWithoutTWiLightCandidate=${resolution.localEvidenceWithoutTWiLightCandidateCount}, " +
+                    "absentFromUsrcheat=${resolution.localEvidenceAbsentFromUsrcheatCount}, " +
+                    "newlyResolvedCandidates=${resolution.newlyResolvedCandidateCount}, " +
+                    "newlyResolvedSupportedCandidates=${resolution.newlyResolvedSupportedCount}, " +
+                    "conflicts=${resolution.conflictCandidateCount}",
+            )
+            local.scan.diagnostics.forEach { println("Local ROM skipped: $it") }
+            println(
+                String.format(
+                    Locale.ROOT,
+                    "Local timing: scan=%.3f ms, header parsing=%.3f ms, evidence merge=%.3f ms, resolver total=%.3f ms",
+                    local.scan.metrics.scanMillis,
+                    local.scan.metrics.headerParseMillis,
+                    result.metrics.evidenceMergeMillis,
+                    result.metrics.resolverTotalMillis,
+                ),
+            )
+        }
         println(
             String.format(
                 Locale.ROOT,

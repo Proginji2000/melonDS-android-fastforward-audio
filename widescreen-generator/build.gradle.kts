@@ -36,6 +36,8 @@ val twilightCandidates = providers.gradleProperty("twilightCandidates")
 val identityOutput = providers.gradleProperty("identityOutput")
     .map(rootProject::file)
     .orElse(rootProject.layout.buildDirectory.dir("widescreen-identity-resolution").map { it.asFile })
+val localRomDirectory = providers.gradleProperty("localRomDirectory")
+    .map(rootProject::file)
 
 tasks.register<JavaExec>("importTWiLightWidescreenCandidates") {
     group = "widescreen maintenance"
@@ -65,15 +67,20 @@ tasks.register<JavaExec>("resolveTWiLightWidescreenIdentities") {
     outputs.file(identityOutput.map { it.resolve("usrcheat-identities.json") })
     outputs.file(identityOutput.map { it.resolve("twilight-identity-resolution.json") })
     outputs.file(identityOutput.map { it.resolve("twilight-identity-summary.json") })
+    if (localRomDirectory.isPresent) {
+        // Do not register ROMs as Gradle inputs: content fingerprinting would read entire files.
+        outputs.file(identityOutput.map { it.resolve("local-rom-identity-evidence.json") })
+        outputs.upToDateWhen { false }
+    }
     doFirst {
-        setArgs(
-            listOf(
-                usrcheatArtifact.get().absolutePath,
-                twilightCandidates.get().absolutePath,
-                rootProject.file("app/widescreen/widescreen_sources.json").absolutePath,
-                rootProject.file("app/widescreen/widescreen_profiles.json").absolutePath,
-                identityOutput.get().absolutePath,
-            ),
+        val resolverArgs = mutableListOf(
+            usrcheatArtifact.get().absolutePath,
+            twilightCandidates.get().absolutePath,
+            rootProject.file("app/widescreen/widescreen_sources.json").absolutePath,
+            rootProject.file("app/widescreen/widescreen_profiles.json").absolutePath,
+            identityOutput.get().absolutePath,
         )
+        localRomDirectory.orNull?.let { resolverArgs += it.absolutePath }
+        setArgs(resolverArgs)
     }
 }

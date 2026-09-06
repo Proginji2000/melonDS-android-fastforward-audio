@@ -9,6 +9,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\resolve_twilight_widescreen_ide
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\tools\resolve_twilight_widescreen_identities.ps1 -Offline
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\tools\resolve_twilight_widescreen_identities.ps1 -Offline -LocalRomDirectory D:\ROMs
 #>
 
 [CmdletBinding()]
@@ -16,6 +19,7 @@ param(
     [string]$UsrcheatCheckout,
     [string]$TWiLightCandidates,
     [string]$OutputDirectory,
+    [string]$LocalRomDirectory,
     [switch]$Offline
 )
 
@@ -51,6 +55,15 @@ if (-not $OutputDirectory) {
 }
 elseif (-not [IO.Path]::IsPathRooted($OutputDirectory)) {
     $OutputDirectory = Join-Path $repositoryRoot $OutputDirectory
+}
+if ($LocalRomDirectory) {
+    if (-not [IO.Path]::IsPathRooted($LocalRomDirectory)) {
+        $LocalRomDirectory = Join-Path $repositoryRoot $LocalRomDirectory
+    }
+    if (-not (Test-Path -LiteralPath $LocalRomDirectory -PathType Container)) {
+        throw "Local ROM directory does not exist: $LocalRomDirectory"
+    }
+    $LocalRomDirectory = (Resolve-Path -LiteralPath $LocalRomDirectory).Path
 }
 
 function Invoke-Git {
@@ -140,10 +153,18 @@ if ($actualCandidatesSha256 -ne $twilightCandidatesSha256) {
 Write-Host "Official source reference (not used for retrieval): $officialRepository"
 Write-Host "Pinned distribution: $distributionRepository @ $commit ($version)"
 Write-Host "usrcheat.dat: $artifactSize bytes, sha256=$artifactSha256"
-& $gradle --offline --no-daemon :widescreen-generator:resolveTWiLightWidescreenIdentities `
-    "-PusrcheatArtifact=$usrcheatArtifact" `
-    "-PtwilightCandidates=$TWiLightCandidates" `
+$gradleArguments = @(
+    "--offline",
+    "--no-daemon",
+    ":widescreen-generator:resolveTWiLightWidescreenIdentities",
+    "-PusrcheatArtifact=$usrcheatArtifact",
+    "-PtwilightCandidates=$TWiLightCandidates",
     "-PidentityOutput=$OutputDirectory"
+)
+if ($LocalRomDirectory) {
+    $gradleArguments += "-PlocalRomDirectory=$LocalRomDirectory"
+}
+& $gradle @gradleArguments
 if ($LASTEXITCODE -ne 0) {
     throw "The TWiLight identity resolver failed (exit $LASTEXITCODE)."
 }
