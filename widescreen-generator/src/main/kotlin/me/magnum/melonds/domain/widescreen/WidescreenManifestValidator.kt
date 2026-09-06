@@ -8,16 +8,16 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
-internal const val WIDESCREEN_SCHEMA_VERSION = 1
+const val WIDESCREEN_SCHEMA_VERSION = 1
 
 @Serializable
-internal data class WidescreenSourcesManifest(
+data class WidescreenSourcesManifest(
     val schemaVersion: Int,
     val sources: List<WidescreenSourceRecord>,
 )
 
 @Serializable
-internal data class WidescreenSourceRecord(
+data class WidescreenSourceRecord(
     val id: String,
     val kind: SourceKind,
     val provenance: SourceProvenance,
@@ -31,21 +31,21 @@ internal data class WidescreenSourceRecord(
 )
 
 @Serializable
-internal enum class SourceKind {
+enum class SourceKind {
     FORUM_POST,
     CODE_REFERENCE,
     GIT_ARTIFACT,
 }
 
 @Serializable
-internal enum class SourceProvenance {
+enum class SourceProvenance {
     PARTIAL,
     CORROBORATING,
     EXACT,
 }
 
 @Serializable
-internal data class SourceLocator(
+data class SourceLocator(
     val url: String,
     val version: String? = null,
     val commit: String? = null,
@@ -53,26 +53,26 @@ internal data class SourceLocator(
 )
 
 @Serializable
-internal data class WidescreenProfilesManifest(
+data class WidescreenProfilesManifest(
     val schemaVersion: Int,
     val romIdentity: RomIdentityDefinition,
     val profiles: List<CanonicalWidescreenProfile>,
 )
 
 @Serializable
-internal data class RomIdentityDefinition(
+data class RomIdentityDefinition(
     val algorithm: RomIdentityAlgorithm,
     val gameCode: GameCodeDefinition,
     val headerChecksum32: HeaderChecksum32Definition,
 )
 
 @Serializable
-internal enum class RomIdentityAlgorithm {
+enum class RomIdentityAlgorithm {
     GAMECODE_PLUS_USRCHEAT_HEADER_CHECKSUM_V1,
 }
 
 @Serializable
-internal data class GameCodeDefinition(
+data class GameCodeDefinition(
     val offsetBytes: Int,
     val lengthBytes: Int,
     val encoding: String,
@@ -80,7 +80,7 @@ internal data class GameCodeDefinition(
 )
 
 @Serializable
-internal data class HeaderChecksum32Definition(
+data class HeaderChecksum32Definition(
     val inputOffsetBytes: Int,
     val inputLengthBytes: Int,
     val implementation: String,
@@ -91,7 +91,7 @@ internal data class HeaderChecksum32Definition(
 )
 
 @Serializable
-internal data class CanonicalWidescreenProfile(
+data class CanonicalWidescreenProfile(
     val id: String,
     val rom: CanonicalRomIdentity,
     val upstreamIdentity: UpstreamRomIdentity? = null,
@@ -105,20 +105,20 @@ internal data class CanonicalWidescreenProfile(
 )
 
 @Serializable
-internal data class CanonicalRomIdentity(
+data class CanonicalRomIdentity(
     val gameCode: String,
     val headerChecksum32: String,
 )
 
 @Serializable
-internal data class UpstreamRomIdentity(
+data class UpstreamRomIdentity(
     val namespace: String,
     val gameCode: String,
     val headerChecksum16: String,
 )
 
 @Serializable
-internal enum class CanonicalRatio(val width: Int, val height: Int) {
+enum class CanonicalRatio(val width: Int, val height: Int) {
     @SerialName("16:9")
     RATIO_16_9(16, 9),
 
@@ -127,14 +127,14 @@ internal enum class CanonicalRatio(val width: Int, val height: Int) {
 }
 
 @Serializable
-internal enum class CanonicalTargetScreen {
+enum class CanonicalTargetScreen {
     TOP,
     BOTTOM,
     UNRESOLVED,
 }
 
 @Serializable
-internal data class ActionReplayPatch(
+data class ActionReplayPatch(
     val format: PatchFormat,
     val binaryEncoding: PatchBinaryEncoding,
     val byteLength: Int,
@@ -143,42 +143,42 @@ internal data class ActionReplayPatch(
 )
 
 @Serializable
-internal enum class PatchFormat {
+enum class PatchFormat {
     ACTION_REPLAY_DS,
 }
 
 @Serializable
-internal enum class PatchBinaryEncoding {
+enum class PatchBinaryEncoding {
     UINT32_WORDS_LITTLE_ENDIAN,
 }
 
 @Serializable
-internal data class PatchClassification(
+data class PatchClassification(
     val sourceRatio: SourceRatio,
     val form: PatchForm,
     val ratioSemantics: RatioSemantics,
 )
 
 @Serializable
-internal enum class SourceRatio {
+enum class SourceRatio {
     NATIVE_16_9,
     NATIVE_16_10,
 }
 
 @Serializable
-internal enum class PatchForm {
+enum class PatchForm {
     MIXED_CODE_AND_DATA,
     CONDITIONAL_DATA_WRITES,
 }
 
 @Serializable
-internal enum class RatioSemantics {
+enum class RatioSemantics {
     MULTI_CONSTANT_RATIO,
     DIRECT_RATIO_Q12,
 }
 
 @Serializable
-internal data class ConversionRecipe(
+data class ConversionRecipe(
     val id: String,
     val sourceRef: String,
     val sourcePatchSha256: String,
@@ -194,12 +194,12 @@ internal data class ConversionRecipe(
 )
 
 @Serializable
-internal enum class ConversionRounding {
+enum class ConversionRounding {
     NEAREST,
 }
 
 @Serializable
-internal data class ConversionContext(
+data class ConversionContext(
     val lineNumber: Int,
     val before: String,
     val after: String,
@@ -207,7 +207,7 @@ internal data class ConversionContext(
 )
 
 @Serializable
-internal data class ProfileValidation(
+data class ProfileValidation(
     val identity: IdentityValidation,
     val ar: ActionReplayValidation,
     val ratio: RatioValidation,
@@ -219,14 +219,14 @@ internal data class ProfileValidation(
 )
 
 @Serializable
-internal enum class IdentityValidation {
+enum class IdentityValidation {
     RESOLVED,
     AMBIGUOUS,
     UNRESOLVED,
 }
 
 @Serializable
-internal enum class ActionReplayValidation {
+enum class ActionReplayValidation {
     SUPPORTED,
     PARTIAL,
     UNSUPPORTED,
@@ -234,57 +234,57 @@ internal enum class ActionReplayValidation {
 }
 
 @Serializable
-internal enum class RatioValidation {
+enum class RatioValidation {
     UNDERSTOOD,
     NEEDS_REVIEW,
     UNKNOWN,
 }
 
 @Serializable
-internal enum class TargetScreenValidation {
+enum class TargetScreenValidation {
     RESOLVED,
     INFERRED,
     UNRESOLVED,
 }
 
 @Serializable
-internal enum class ConversionValidation {
+enum class ConversionValidation {
     NOT_NEEDED,
     SAFE_RECIPE_APPLIED,
     NEEDS_REVIEW,
 }
 
 @Serializable
-internal enum class CompatibilityValidation {
+enum class CompatibilityValidation {
     NO_KNOWN_INCOMPATIBILITY,
     KNOWN_INCOMPATIBILITY,
     UNKNOWN,
 }
 
 @Serializable
-internal enum class TrustValidation {
+enum class TrustValidation {
     UNVALIDATED,
     SOURCE_VALIDATED,
     RUNTIME_VALIDATED,
 }
 
 @Serializable
-internal enum class ActivationValidation {
+enum class ActivationValidation {
     DISABLED,
     APPROVED,
 }
 
-internal data class ValidatedWidescreenManifests(
+data class ValidatedWidescreenManifests(
     val sources: WidescreenSourcesManifest,
     val profiles: WidescreenProfilesManifest,
 )
 
-internal class WidescreenManifestValidationException(
+class WidescreenManifestValidationException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalArgumentException(message, cause)
 
-internal object WidescreenManifestValidator {
+object WidescreenManifestValidator {
     private val json = Json {
         ignoreUnknownKeys = false
         isLenient = false

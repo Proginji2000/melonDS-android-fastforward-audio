@@ -1,5 +1,7 @@
 import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
+import org.gradle.api.tasks.PathSensitivity
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,6 +10,32 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+val widescreenGeneratorClasspath by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+val widescreenSourcesManifest = layout.projectDirectory.file("widescreen/widescreen_sources.json")
+val widescreenProfilesManifest = layout.projectDirectory.file("widescreen/widescreen_profiles.json")
+val generatedWidescreenSourceDirectory =
+    layout.buildDirectory.dir("generated/source/widescreen/main/kotlin")
+val generatedWidescreenSource = generatedWidescreenSourceDirectory.map {
+    it.file("me/magnum/melonds/domain/widescreen/GeneratedWidescreenProfiles.kt")
+}
+val generateWidescreenProfiles by tasks.registering(JavaExec::class) {
+    group = "build"
+    description = "Validates widescreen manifests and generates the Kotlin runtime registry"
+    classpath = widescreenGeneratorClasspath
+    mainClass.set("me.magnum.melonds.domain.widescreen.WidescreenProfileGeneratorMain")
+    inputs.files(widescreenSourcesManifest, widescreenProfilesManifest)
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(generatedWidescreenSource)
+    args(
+        widescreenSourcesManifest.asFile.absolutePath,
+        widescreenProfilesManifest.asFile.absolutePath,
+        generatedWidescreenSource.get().asFile.absolutePath,
+    )
 }
 
 android {
@@ -87,6 +115,8 @@ android {
         }
     }
     sourceSets {
+        getByName("main").kotlin.directories +=
+            generatedWidescreenSourceDirectory.get().asFile.absolutePath
         // Adds exported schema location as test app assets.
         getByName("androidTest").assets.directories += "$projectDir/schemas"
         getByName("test").resources.directories += "$projectDir/widescreen"
@@ -110,6 +140,8 @@ kotlin {
 
 dependencies {
     val gitHubImplementation by configurations
+
+    add(widescreenGeneratorClasspath.name, projects.widescreenGenerator)
 
     implementation(projects.masterswitch)
     implementation(projects.rcheevosApi)
@@ -170,10 +202,18 @@ dependencies {
     ksp(libs.hilt.compiler.android)
     ksp(libs.room.compiler)
 
+    testImplementation(projects.widescreenGenerator)
     testImplementation(libs.junit)
 
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    dependsOn(generateWidescreenProfiles)
+}
+tasks.matching { it.name.startsWith("ksp") && it.name.endsWith("Kotlin") }.configureEach {
+    dependsOn(generateWidescreenProfiles)
 }

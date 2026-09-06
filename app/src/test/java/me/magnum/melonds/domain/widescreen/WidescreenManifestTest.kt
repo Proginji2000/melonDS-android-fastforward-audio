@@ -51,30 +51,43 @@ class WidescreenManifestTest {
     @Test
     fun canonicalProfilesExactlyMatchCurrentRuntimeProfiles() {
         val runtimeProfiles = currentRuntimeProfiles()
+        val generatedProfiles = GeneratedWidescreenProfiles.profiles.values.toList()
         assertEquals(2, canonical.profiles.profiles.size)
         assertEquals(
             canonical.profiles.profiles.map { it.id },
             runtimeProfiles.map { it.id },
         )
+        assertEquals(
+            canonical.profiles.profiles.map { it.id },
+            generatedProfiles.map { it.id },
+        )
 
         canonical.profiles.profiles.forEach { expected ->
+            val romKey = WidescreenRomKey(
+                gameCode = expected.rom.gameCode,
+                headerChecksum = expected.rom.headerChecksum32.toUInt(16),
+            )
             val runtime = requireNotNull(
                 AutoWidescreen.resolve(
                     RomInfo(
-                        gameCode = expected.rom.gameCode,
-                        headerChecksum = expected.rom.headerChecksum32.toUInt(16),
+                        gameCode = romKey.gameCode,
+                        headerChecksum = romKey.headerChecksum,
                         gameTitle = "manifest parity test",
                         gameName = "manifest parity test",
                     ),
                 ),
             )
+            val generated = requireNotNull(GeneratedWidescreenProfiles.profiles[romKey])
+            val expectedActionReplayCode = expected.patch.actionReplayLines.joinToString(" ")
 
             assertEquals(expected.id, runtime.id)
             assertEquals(expected.rom.gameCode, runtime.romKey.gameCode)
             assertEquals(expected.rom.headerChecksum32.toUInt(16), runtime.romKey.headerChecksum)
             assertEquals(expected.targetRatio.toRuntimeRatio(), runtime.targetRatio)
             assertEquals(expected.targetScreen.toRuntimeTargetScreen(), runtime.targetScreen)
-            assertEquals(expected.patch.actionReplayLines, runtime.actionReplayCode.toLines())
+            assertEquals(expectedActionReplayCode, runtime.actionReplayCode)
+            assertEquals(expectedActionReplayCode, generated.actionReplayCode)
+            assertEquals(runtime, generated)
         }
     }
 
@@ -422,10 +435,6 @@ class WidescreenManifestTest {
             CanonicalTargetScreen.BOTTOM -> WidescreenTargetScreen.BOTTOM
             CanonicalTargetScreen.UNRESOLVED -> error("UNRESOLVED target cannot match runtime")
         }
-    }
-
-    private fun String.toLines(): List<String> {
-        return split(' ').chunked(2).map { it.joinToString(" ") }
     }
 
     @Suppress("UNCHECKED_CAST")

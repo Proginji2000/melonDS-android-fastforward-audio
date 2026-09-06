@@ -1,27 +1,27 @@
 package me.magnum.melonds.domain.widescreen
 
-internal const val ACTION_REPLAY_CAPABILITY_VERSION = "MELONDS_AR_ENGINE_CAPABILITIES_V1"
-internal const val ACTION_REPLAY_ENGINE_CORE_COMMIT =
+const val ACTION_REPLAY_CAPABILITY_VERSION = "MELONDS_AR_ENGINE_CAPABILITIES_V1"
+const val ACTION_REPLAY_ENGINE_CORE_COMMIT =
     "c89b1de2a0c9fc6a76627f2484ee3fd2b7e8fc01"
 // SHA-256 of AREngine.cpp encoded as UTF-8 with LF line endings.
-internal const val ACTION_REPLAY_ENGINE_SOURCE_SHA256 =
+const val ACTION_REPLAY_ENGINE_SOURCE_SHA256 =
     "63c7408a0042a9e3b96ed2f7e970d83d03eac5d5be4efa4c44fdb292da175763"
-internal const val ACTION_REPLAY_ENGINE_CONDITION_STACK_BITS = 32
+const val ACTION_REPLAY_ENGINE_CONDITION_STACK_BITS = 32
 
-internal enum class ActionReplayValidationStatus {
+enum class ActionReplayValidationStatus {
     SUPPORTED,
     PARTIALLY_SUPPORTED,
     UNSUPPORTED,
     INVALID,
 }
 
-internal data class ActionReplayWordPair(
+data class ActionReplayWordPair(
     val lineNumber: Int,
     val firstWord: UInt,
     val secondWord: UInt,
 )
 
-internal data class ActionReplayInstruction(
+data class ActionReplayInstruction(
     val lineNumber: Int,
     val firstWord: UInt,
     val secondWord: UInt,
@@ -29,7 +29,7 @@ internal data class ActionReplayInstruction(
     val payload: List<ActionReplayWordPair> = emptyList(),
 )
 
-internal data class ActionReplayValidationResult(
+data class ActionReplayValidationResult(
     val capabilityVersion: String,
     val status: ActionReplayValidationStatus,
     val diagnostics: List<String>,
@@ -56,7 +56,7 @@ internal data class ActionReplayValidationResult(
  * This validates syntax, control structure, and payload boundaries. It deliberately does not
  * emulate memory accesses or claim that runtime addresses are safe.
  */
-internal object ActionReplayValidator {
+object ActionReplayValidator {
     private val canonicalLine = Regex("[0-9A-F]{8} [0-9A-F]{8}")
 
     fun validate(lines: List<String>): ActionReplayValidationResult {
