@@ -4,15 +4,13 @@
 #include <jni.h>
 #include <mutex>
 #include <string>
-#include <sstream>
-#include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <cstdlib>
 #include <time.h>
 #include <MelonDS.h>
 #include <MelonDSAudio.h>
 #include <RomGbaSlotConfig.h>
+#include "ActionReplayCodeParser.h"
 #include <android/asset_manager_jni.h>
 #include "UriFileHandler.h"
 #include "JniEnvHandler.h"
@@ -169,70 +167,63 @@ Java_me_magnum_melonds_MelonEmulator_setupCheats(JNIEnv* env, jobject thiz, jobj
         return;
     }
 
-    jclass cheatClass = env->GetObjectClass(env->GetObjectArrayElement(cheats, 0));
+    jobject firstCheat = env->GetObjectArrayElement(cheats, 0);
+    jclass cheatClass = env->GetObjectClass(firstCheat);
+    env->DeleteLocalRef(firstCheat);
     jfieldID codeField = env->GetFieldID(cheatClass, "code", "Ljava/lang/String;");
 
     std::list<MelonDSAndroid::Cheat> internalCheats;
 
-    for (int i = 0; i < cheatCount; ++i) {
+    for (jsize i = 0; i < cheatCount; ++i) {
         jobject cheat = env->GetObjectArrayElement(cheats, i);
         jstring code = (jstring) env->GetObjectField(cheat, codeField);
-        const char* codeStringPtr = env->GetStringUTFChars(code, JNI_FALSE);
-        std::string codeString = codeStringPtr;
-        // Since each part of a cheat code has 8 characters (4 bytes), we can add 1 to the length (to ensure that each part has a matching space separator) and divide by 9
-        // (part length + space separator) to calculate the total number of parts in the cheat
-        size_t codeLength = (codeString.size() + 1) / 9;
-
-        bool isBad = false;
-        std::size_t start = 0;
-        std::size_t end = 0;
-
-        MelonDSAndroid::Cheat internalCheat;
-        internalCheat.code.reserve(codeLength);
-
-        // Split code string into sections separated by a space
-        while ((end = codeString.find(' ', start)) != std::string::npos) {
-            if (end != start) {
-                char* endPointer;
-                std::string sectionString = codeString.substr(start, end - start);
-                // Each code section must be 4 bytes (8 hex characters)
-                if (sectionString.size() != 8) {
-                    isBad = true;
-                    break;
-                }
-
-                unsigned long section = strtoul(sectionString.c_str(), &endPointer, 16);
-                if (*endPointer == 0) {
-                    internalCheat.code.push_back((u32) section);
-                } else {
-                    isBad = true;
-                    break;
-                }
-            }
-            start = end + 1;
-        }
-
-        if (!isBad && end != start) {
-            char* endPointer;
-            std::string sectionString = codeString.substr(start, end - start);
-            if (sectionString.size() != 8) {
-                isBad = true;
-            } else {
-                unsigned long section = strtoul(sectionString.c_str(), &endPointer, 16);
-                internalCheat.code.push_back((u32) section);
-            }
-        }
-
-        env->ReleaseStringUTFChars(code, codeStringPtr);
-
-        if (isBad) {
+        if (code == nullptr) {
+            LOG_ERROR("ActionReplay", "Rejected null code for cheat %d", i);
+            env->DeleteLocalRef(cheat);
             continue;
         }
 
-        internalCheats.push_back(internalCheat);
+        const char* codeStringPtr = env->GetStringUTFChars(code, JNI_FALSE);
+        if (codeStringPtr == nullptr) {
+            env->DeleteLocalRef(code);
+            env->DeleteLocalRef(cheat);
+            env->DeleteLocalRef(cheatClass);
+            return;
+        }
+
+        auto parseResult = MelonDSAndroid::ParseActionReplayCode(codeStringPtr);
+
+        env->ReleaseStringUTFChars(code, codeStringPtr);
+        env->DeleteLocalRef(code);
+        env->DeleteLocalRef(cheat);
+
+        if (!parseResult.IsValid()) {
+            switch (parseResult.Error) {
+            case MelonDSAndroid::ActionReplayParseError::Empty:
+                LOG_ERROR("ActionReplay", "Rejected empty code for cheat %d", i);
+                break;
+            case MelonDSAndroid::ActionReplayParseError::InvalidToken:
+                LOG_ERROR("ActionReplay", "Rejected invalid token at index %zu for cheat %d", parseResult.TokenIndex, i);
+                break;
+            case MelonDSAndroid::ActionReplayParseError::ValueOutOfRange:
+                LOG_ERROR("ActionReplay", "Rejected value outside u32 at token index %zu for cheat %d", parseResult.TokenIndex, i);
+                break;
+            case MelonDSAndroid::ActionReplayParseError::OddWordCount:
+                LOG_ERROR("ActionReplay", "Rejected odd word count %zu for cheat %d", parseResult.Code.size(), i);
+                break;
+            case MelonDSAndroid::ActionReplayParseError::None:
+                break;
+            }
+            continue;
+        }
+
+        MelonDSAndroid::Cheat internalCheat;
+        internalCheat.code = std::move(parseResult.Code);
+        internalCheats.push_back(std::move(internalCheat));
     }
 
-    MelonDSAndroid::setCodeList(internalCheats);
+    env->DeleteLocalRef(cheatClass);
+    MelonDSAndroid::setCodeList(std::move(internalCheats));
 }
 
 JNIEXPORT void JNICALL

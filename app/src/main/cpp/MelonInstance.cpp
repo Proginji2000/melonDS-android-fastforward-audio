@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <GLES3/gl3.h>
 #include "Args.h"
+#include "ARCodeValidator.h"
 #include "GPU3D_Compute.h"
 #include "Configuration.h"
 #include "DSi.h"
@@ -483,13 +484,44 @@ void MelonInstance::loadCheats(std::list<Cheat> cheats)
 {
     std::vector<ARCode> codeList;
 
-    for (auto cheat : cheats)
+    std::size_t cheatIndex = 0;
+    for (const auto& cheat : cheats)
     {
+        const ARCodeValidationResult validation = ValidateARCode(cheat.code);
+        if (!validation.IsValid())
+        {
+            switch (validation.Error)
+            {
+            case ARCodeValidationError::Empty:
+                Log(LogLevel::Warn, "ActionReplay: rejected empty code for cheat %zu\n", cheatIndex);
+                break;
+            case ARCodeValidationError::OddWordCount:
+                Log(LogLevel::Warn, "ActionReplay: rejected odd word count %zu for cheat %zu\n", cheat.code.size(), cheatIndex);
+                break;
+            case ARCodeValidationError::TruncatedEPayload:
+                Log(
+                    LogLevel::Warn,
+                    "ActionReplay: rejected truncated E payload at instruction %zu for cheat %zu "
+                    "(%u bytes requested, %zu available)\n",
+                    validation.InstructionIndex,
+                    cheatIndex,
+                    validation.PayloadBytes,
+                    validation.AvailablePayloadBytes
+                );
+                break;
+            case ARCodeValidationError::None:
+                break;
+            }
+            cheatIndex++;
+            continue;
+        }
+
         ARCode arCode {
             .Enabled = true,
             .Code = cheat.code,
         };
         codeList.push_back(arCode);
+        cheatIndex++;
     }
 
     nds->AREngine.Cheats = codeList;

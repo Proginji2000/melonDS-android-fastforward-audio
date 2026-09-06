@@ -2,10 +2,10 @@ package me.magnum.melonds.domain.widescreen
 
 internal const val ACTION_REPLAY_CAPABILITY_VERSION = "MELONDS_AR_ENGINE_CAPABILITIES_V1"
 internal const val ACTION_REPLAY_ENGINE_CORE_COMMIT =
-    "6d763a82da4934070862c0412a23bd2d1f12f420"
+    "c89b1de2a0c9fc6a76627f2484ee3fd2b7e8fc01"
 // SHA-256 of AREngine.cpp encoded as UTF-8 with LF line endings.
 internal const val ACTION_REPLAY_ENGINE_SOURCE_SHA256 =
-    "b9f235f31baa2268d50dd49d0b9c0a9de05b5d2c716836db4df8408d66f4c4e5"
+    "63c7408a0042a9e3b96ed2f7e970d83d03eac5d5be4efa4c44fdb292da175763"
 internal const val ACTION_REPLAY_ENGINE_CONDITION_STACK_BITS = 32
 
 internal enum class ActionReplayValidationStatus {

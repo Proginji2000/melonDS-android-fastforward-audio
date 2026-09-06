@@ -14,7 +14,7 @@ class ActionReplayValidatorTest {
     fun capabilityMetadataMatchesPinnedEngineSource() {
         assertEquals("MELONDS_AR_ENGINE_CAPABILITIES_V1", ACTION_REPLAY_CAPABILITY_VERSION)
         assertEquals(
-            "6d763a82da4934070862c0412a23bd2d1f12f420",
+            "c89b1de2a0c9fc6a76627f2484ee3fd2b7e8fc01",
             ACTION_REPLAY_ENGINE_CORE_COMMIT,
         )
         assertEquals(32, ACTION_REPLAY_ENGINE_CONDITION_STACK_BITS)
