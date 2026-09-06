@@ -12,6 +12,7 @@ import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.Locale
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,10 +32,11 @@ const val USRCHEAT_ARTIFACT_LICENSE = "NOASSERTION"
 
 private const val PINNED_TWILIGHT_CANDIDATES_SHA256 =
     "ccb1d0c2177df73653224716017364c1d9fbbf3d667425fa799fe70f7af5d000"
-private const val TWILIGHT_UPSTREAM_IDENTITY_NAMESPACE = "TWILIGHT_WIDESCREEN_FILENAME_V1"
 internal val GAME_CODE_PATTERN = Regex("^[A-Z0-9]{4}$")
 private val CHECKSUM16_PATTERN = Regex("^[0-9A-F]{4}$")
 private val CHECKSUM32_PATTERN = Regex("^[0-9A-F]{8}$")
+private val EVIDENCE_ID_PATTERN = Regex("^[a-z0-9]+(?:-[a-z0-9]+)*$")
+private val EVIDENCE_SOURCE_REF_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 @Serializable
 data class UsrcheatSource(
@@ -133,13 +135,106 @@ enum class ResolvedRuntimeIdentityStatus {
 
 @Serializable
 data class IdentityEvidenceRecord(
-    val schemaVersion: Int = 1,
+    val id: String,
     val type: IdentityEvidenceType,
-    val sourceRef: String,
     val gameCode: String,
     val upstreamHeaderCrc16: String,
     val headerChecksum32: String,
+    val sourceRef: String,
 )
+
+@Serializable
+enum class UpstreamHeaderCrc16Algorithm {
+    TWILIGHT_WIDESCREEN_STORED_HEADER_CRC16_V1,
+}
+
+@Serializable
+data class IdentityEvidenceAlgorithms(
+    val upstreamHeaderCrc16: UpstreamHeaderCrc16Algorithm,
+    val headerChecksum32: RomIdentityAlgorithm,
+)
+
+@Serializable
+data class WidescreenIdentityEvidenceManifest(
+    val schemaVersion: Int,
+    val algorithms: IdentityEvidenceAlgorithms,
+    val records: List<IdentityEvidenceRecord>,
+)
+
+class WidescreenIdentityEvidenceValidationException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalArgumentException(message, cause)
+
+object WidescreenIdentityEvidenceValidator {
+    private val json = Json {
+        ignoreUnknownKeys = false
+        isLenient = false
+        allowTrailingComma = false
+    }
+
+    fun parseAndValidate(manifestJson: String): WidescreenIdentityEvidenceManifest {
+        requireEvidence(manifestJson.endsWith('\n')) { "Evidence manifest must end with a newline" }
+        requireEvidence('\r' !in manifestJson) { "Evidence manifest must use LF line endings" }
+        val manifest = try {
+            json.decodeFromString<WidescreenIdentityEvidenceManifest>(manifestJson)
+        } catch (error: SerializationException) {
+            throw WidescreenIdentityEvidenceValidationException("Invalid evidence manifest JSON", error)
+        }
+        return validate(manifest)
+    }
+
+    fun validate(manifest: WidescreenIdentityEvidenceManifest): WidescreenIdentityEvidenceManifest {
+        requireEvidence(manifest.schemaVersion == 1) {
+            "Unsupported evidence schemaVersion ${manifest.schemaVersion}"
+        }
+        requireEvidence(
+            manifest.algorithms.upstreamHeaderCrc16 ==
+                UpstreamHeaderCrc16Algorithm.TWILIGHT_WIDESCREEN_STORED_HEADER_CRC16_V1,
+        ) { "Unsupported upstream header CRC16 algorithm" }
+        requireEvidence(
+            manifest.algorithms.headerChecksum32 == RomIdentityAlgorithm.GAMECODE_PLUS_USRCHEAT_HEADER_CHECKSUM_V1,
+        ) { "Unsupported header checksum32 algorithm" }
+        manifest.records.forEach(::validateIdentityEvidence)
+        requireEvidence(manifest.records.map { it.id }.distinct().size == manifest.records.size) {
+            "Duplicate evidence id"
+        }
+        requireEvidence(manifest.records.distinct().size == manifest.records.size) {
+            "Duplicate evidence record"
+        }
+        requireEvidence(manifest.records == manifest.records.sortedWith(IDENTITY_EVIDENCE_ORDER)) {
+            "Evidence records are not in canonical order"
+        }
+        return manifest
+    }
+}
+
+private val IDENTITY_EVIDENCE_ORDER = compareBy<IdentityEvidenceRecord>(
+    { it.gameCode },
+    { it.upstreamHeaderCrc16.toUInt(16) },
+    { it.headerChecksum32.toUInt(16) },
+    { it.type.name },
+    { it.id },
+)
+
+private fun validateIdentityEvidence(evidence: IdentityEvidenceRecord) {
+    requireEvidence(EVIDENCE_ID_PATTERN.matches(evidence.id)) { "Invalid evidence id" }
+    requireEvidence(GAME_CODE_PATTERN.matches(evidence.gameCode)) { "Invalid evidence gameCode" }
+    requireEvidence(CHECKSUM16_PATTERN.matches(evidence.upstreamHeaderCrc16)) { "Invalid evidence CRC16" }
+    requireEvidence(evidence.upstreamHeaderCrc16 != "FFFF") { "Wildcard evidence cannot identify a revision" }
+    requireEvidence(CHECKSUM32_PATTERN.matches(evidence.headerChecksum32)) { "Invalid evidence checksum32" }
+    requireEvidence(EVIDENCE_SOURCE_REF_PATTERN.matches(evidence.sourceRef)) { "Invalid evidence sourceRef" }
+    if (evidence.type == IdentityEvidenceType.LOCAL_ROM_HEADER) {
+        requireEvidence(
+            evidence.sourceRef ==
+                "local-rom-header:${evidence.gameCode}:${evidence.upstreamHeaderCrc16}:${evidence.headerChecksum32}",
+        ) { "LOCAL_ROM_HEADER sourceRef must be deterministic" }
+    }
+}
+
+private inline fun requireEvidence(condition: Boolean, message: () -> String) {
+    if (!condition) throw WidescreenIdentityEvidenceValidationException(message())
+}
 
 data class TWiLightIdentityJoin(
     val candidate: TWiLightWidescreenCandidate,
@@ -371,9 +466,9 @@ object TWiLightIdentityResolver {
         joinedCandidates: List<TWiLightIdentityJoin>,
         evidenceRecords: List<IdentityEvidenceRecord>,
     ): List<TWiLightIdentityResolutionRecord> {
-        evidenceRecords.forEach(::validateEvidence)
+        evidenceRecords.forEach(::validateIdentityEvidence)
         val evidenceByIdentity = evidenceRecords
-            .sortedWith(compareBy({ it.gameCode }, { it.upstreamHeaderCrc16 }, { it.type.name }, { it.sourceRef }, { it.headerChecksum32 }))
+            .sortedWith(IDENTITY_EVIDENCE_ORDER)
             .groupBy { it.gameCode to it.upstreamHeaderCrc16 }
         return joinedCandidates.map { joined ->
             val candidate = joined.candidate
@@ -447,27 +542,6 @@ object TWiLightIdentityResolver {
                 diagnostics = diagnostics,
             )
         }
-    }
-
-    fun runtimeObservedEvidence(sourcesJson: String, profilesJson: String): List<IdentityEvidenceRecord> {
-        val manifests = WidescreenManifestValidator.parseAndValidate(sourcesJson, profilesJson)
-        return manifests.profiles.profiles.mapNotNull { profile ->
-            val upstream = profile.upstreamIdentity ?: return@mapNotNull null
-            if (
-                upstream.namespace != TWILIGHT_UPSTREAM_IDENTITY_NAMESPACE ||
-                profile.validation.identity != IdentityValidation.RESOLVED ||
-                profile.validation.trust != TrustValidation.RUNTIME_VALIDATED
-            ) {
-                return@mapNotNull null
-            }
-            IdentityEvidenceRecord(
-                type = IdentityEvidenceType.RUNTIME_OBSERVED,
-                sourceRef = "widescreen_profiles.json#${profile.id}",
-                gameCode = upstream.gameCode,
-                upstreamHeaderCrc16 = upstream.headerChecksum16,
-                headerChecksum32 = profile.rom.headerChecksum32,
-            )
-        }.sortedWith(compareBy({ it.gameCode }, { it.upstreamHeaderCrc16 }, { it.sourceRef }))
     }
 
     fun encodeArtifacts(
@@ -562,15 +636,6 @@ object TWiLightIdentityResolver {
         )
     }
 
-    private fun validateEvidence(evidence: IdentityEvidenceRecord) {
-        require(evidence.schemaVersion == 1) { "Unsupported identity evidence schema" }
-        require(GAME_CODE_PATTERN.matches(evidence.gameCode)) { "Invalid evidence gameCode" }
-        require(CHECKSUM16_PATTERN.matches(evidence.upstreamHeaderCrc16)) { "Invalid evidence CRC16" }
-        require(evidence.upstreamHeaderCrc16 != "FFFF") { "Wildcard evidence cannot identify a revision" }
-        require(CHECKSUM32_PATTERN.matches(evidence.headerChecksum32)) { "Invalid evidence checksum32" }
-        require(evidence.sourceRef.isNotBlank()) { "Evidence sourceRef must not be blank" }
-    }
-
     private inline fun <reified T : Enum<T>> enumCounts(values: List<T>): List<TWiLightValueCount> {
         val counts = values.groupingBy { it }.eachCount()
         return enumValues<T>().map { TWiLightValueCount(it.name, counts[it] ?: 0) }
@@ -600,19 +665,20 @@ object TWiLightIdentityResolutionRunner {
     }
 
     fun mergeEvidence(
-        runtimeEvidence: List<IdentityEvidenceRecord>,
-        localScan: LocalRomScanResult?,
-    ): List<IdentityEvidenceRecord> = if (localScan == null) {
-        runtimeEvidence
+        canonicalEvidence: List<IdentityEvidenceRecord>,
+        localEvidence: List<IdentityEvidenceRecord>?,
+    ): List<IdentityEvidenceRecord> = if (localEvidence == null) {
+        canonicalEvidence
     } else {
-        runtimeEvidence + localScan.evidenceRecords
+        (canonicalEvidence + localEvidence)
+            .distinctBy { listOf(it.type.name, it.gameCode, it.upstreamHeaderCrc16, it.headerChecksum32) }
+            .sortedWith(IDENTITY_EVIDENCE_ORDER)
     }
 
     fun run(
         usrcheatPath: Path,
         twilightCandidatesPath: Path,
-        widescreenSourcesPath: Path,
-        widescreenProfilesPath: Path,
+        identityEvidencePath: Path,
         outputDirectory: Path,
         localRomDirectory: Path? = null,
     ): TWiLightIdentityRunResult {
@@ -634,15 +700,13 @@ object TWiLightIdentityResolutionRunner {
             "Unexpected TWiLight candidates source commit"
         }
 
-        val sourcesBytes = Files.readAllBytes(widescreenSourcesPath)
-        val profilesBytes = Files.readAllBytes(widescreenProfilesPath)
-        val runtimeEvidence = TWiLightIdentityResolver.runtimeObservedEvidence(
-            String(sourcesBytes, UTF_8),
-            String(profilesBytes, UTF_8),
-        )
+        val identityEvidenceBytes = Files.readAllBytes(identityEvidencePath)
+        val canonicalEvidence = WidescreenIdentityEvidenceValidator.parseAndValidate(
+            String(identityEvidenceBytes, UTF_8),
+        ).records
         val localScan = localRomDirectory?.let(LocalRomIdentityScanner::scan)
         val mergeStart = System.nanoTime()
-        val evidence = mergeEvidence(runtimeEvidence, localScan)
+        val evidence = mergeEvidence(canonicalEvidence, localScan?.evidenceRecords)
         val mergeNanos = System.nanoTime() - mergeStart
 
         val parseStart = System.nanoTime()
@@ -653,7 +717,7 @@ object TWiLightIdentityResolutionRunner {
         val joinNanos = System.nanoTime() - joinStart
         val resolverStart = System.nanoTime()
         val baselineResolutions = localScan?.let {
-            TWiLightIdentityResolver.resolve(joined, runtimeEvidence)
+            TWiLightIdentityResolver.resolve(joined, canonicalEvidence)
         }
         val evidenceStart = System.nanoTime()
         val resolutions = TWiLightIdentityResolver.resolve(joined, evidence)
@@ -676,16 +740,10 @@ object TWiLightIdentityResolutionRunner {
                 sha256 = candidatesSha,
             ),
             IdentityArtifactReference(
-                filename = widescreenProfilesPath.fileName.toString(),
-                sourcePath = "app/widescreen/${widescreenProfilesPath.fileName}",
-                sizeBytes = profilesBytes.size.toLong(),
-                sha256 = sha256(profilesBytes),
-            ),
-            IdentityArtifactReference(
-                filename = widescreenSourcesPath.fileName.toString(),
-                sourcePath = "app/widescreen/${widescreenSourcesPath.fileName}",
-                sizeBytes = sourcesBytes.size.toLong(),
-                sha256 = sha256(sourcesBytes),
+                filename = identityEvidencePath.fileName.toString(),
+                sourcePath = "app/widescreen/${identityEvidencePath.fileName}",
+                sizeBytes = identityEvidenceBytes.size.toLong(),
+                sha256 = sha256(identityEvidenceBytes),
             ),
         )
         val artifacts = TWiLightIdentityResolver.encodeArtifacts(
@@ -697,22 +755,6 @@ object TWiLightIdentityResolutionRunner {
             usrcheatArtifact = usrcheatArtifact,
             inputs = inputs,
         )
-
-        val pokemon = resolutions.singleOrNull {
-            it.upstreamTid == "IRAF" && it.upstreamHeaderCrc16 == "BC1D"
-        } ?: error("Pinned TWiLight candidates must contain exactly one IRAF/BC1D sentinel")
-        val pokemonRuntimeSentinelPresent = pokemon.evidence.any {
-            it.type == IdentityEvidenceType.RUNTIME_OBSERVED && it.headerChecksum32 == "031EF208"
-        }
-        if (localScan == null) {
-            require(
-                pokemon.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED &&
-                    pokemon.resolvedHeaderChecksum32 == "031EF208" &&
-                    pokemonRuntimeSentinelPresent,
-            ) { "IRAF/BC1D runtime evidence sentinel did not resolve exactly" }
-        } else {
-            require(pokemonRuntimeSentinelPresent) { "IRAF/BC1D runtime evidence sentinel is missing" }
-        }
 
         Files.createDirectories(outputDirectory)
         val identitiesPath = outputDirectory.resolve(USRCHEAT_IDENTITIES_FILENAME)
@@ -794,18 +836,17 @@ object TWiLightIdentityResolutionRunner {
 object TWiLightIdentityResolverMain {
     @JvmStatic
     fun main(args: Array<String>) {
-        require(args.size in 5..6) {
+        require(args.size in 4..5) {
             "Usage: TWiLightIdentityResolverMain <usrcheat.dat> <TWiLight candidates JSON> " +
-                "<widescreen sources JSON> <widescreen profiles JSON> <output directory> " +
+                "<identity evidence JSON> <output directory> " +
                 "[local ROM directory]"
         }
         val result = TWiLightIdentityResolutionRunner.run(
             usrcheatPath = Path.of(args[0]),
             twilightCandidatesPath = Path.of(args[1]),
-            widescreenSourcesPath = Path.of(args[2]),
-            widescreenProfilesPath = Path.of(args[3]),
-            outputDirectory = Path.of(args[4]),
-            localRomDirectory = args.getOrNull(5)?.let { Path.of(it) },
+            identityEvidencePath = Path.of(args[2]),
+            outputDirectory = Path.of(args[3]),
+            localRomDirectory = args.getOrNull(4)?.let { Path.of(it) },
         )
         println(
             "Identity resolution: usrcheat=${result.summary.usrcheatCounts.entryCount}, " +

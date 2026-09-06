@@ -36,6 +36,7 @@ val twilightCandidates = providers.gradleProperty("twilightCandidates")
 val identityOutput = providers.gradleProperty("identityOutput")
     .map(rootProject::file)
     .orElse(rootProject.layout.buildDirectory.dir("widescreen-identity-resolution").map { it.asFile })
+val identityEvidenceManifest = rootProject.file("app/widescreen/widescreen_identity_evidence.json")
 val localRomDirectory = providers.gradleProperty("localRomDirectory")
     .map(rootProject::file)
 
@@ -60,10 +61,7 @@ tasks.register<JavaExec>("resolveTWiLightWidescreenIdentities") {
     mainClass.set("me.magnum.melonds.domain.widescreen.TWiLightIdentityResolverMain")
     inputs.file(usrcheatArtifact).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(twilightCandidates).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.file(rootProject.file("app/widescreen/widescreen_sources.json"))
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.file(rootProject.file("app/widescreen/widescreen_profiles.json"))
-        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(identityEvidenceManifest).withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(identityOutput.map { it.resolve("usrcheat-identities.json") })
     outputs.file(identityOutput.map { it.resolve("twilight-identity-resolution.json") })
     outputs.file(identityOutput.map { it.resolve("twilight-identity-summary.json") })
@@ -76,8 +74,7 @@ tasks.register<JavaExec>("resolveTWiLightWidescreenIdentities") {
         val resolverArgs = mutableListOf(
             usrcheatArtifact.get().absolutePath,
             twilightCandidates.get().absolutePath,
-            rootProject.file("app/widescreen/widescreen_sources.json").absolutePath,
-            rootProject.file("app/widescreen/widescreen_profiles.json").absolutePath,
+            identityEvidenceManifest.absolutePath,
             identityOutput.get().absolutePath,
         )
         localRomDirectory.orNull?.let { resolverArgs += it.absolutePath }

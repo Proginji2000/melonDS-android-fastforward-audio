@@ -141,11 +141,14 @@ object LocalRomIdentityScanner {
             .filter { it.upstreamHeaderCrc16 != "FFFF" }
             .map { identity ->
                 IdentityEvidenceRecord(
+                    id = "local-rom-header-${identity.gameCode.lowercase(Locale.ROOT)}-" +
+                        "${identity.upstreamHeaderCrc16.lowercase(Locale.ROOT)}-" +
+                        identity.headerChecksum32.lowercase(Locale.ROOT),
                     type = IdentityEvidenceType.LOCAL_ROM_HEADER,
-                    sourceRef = "local-rom-header:${identity.gameCode}:${identity.upstreamHeaderCrc16}:${identity.headerChecksum32}",
                     gameCode = identity.gameCode,
                     upstreamHeaderCrc16 = identity.upstreamHeaderCrc16,
                     headerChecksum32 = identity.headerChecksum32,
+                    sourceRef = "local-rom-header:${identity.gameCode}:${identity.upstreamHeaderCrc16}:${identity.headerChecksum32}",
                 )
             }
             .toList()

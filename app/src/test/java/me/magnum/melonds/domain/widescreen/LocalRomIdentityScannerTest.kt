@@ -164,16 +164,22 @@ class LocalRomIdentityScannerTest {
         val root = newRoot()
         writeRom(root.resolve("exact.nds"), syntheticHeader("TEST", 0x1234))
         val local = LocalRomIdentityScanner.scan(root).evidenceRecords.single()
-        val runtime = local.copy(type = IdentityEvidenceType.RUNTIME_OBSERVED, sourceRef = "runtime-fixture")
+        val runtime = local.copy(
+            id = "runtime-observed-fixture",
+            type = IdentityEvidenceType.RUNTIME_OBSERVED,
+            sourceRef = "runtime-validation:fixture",
+        )
+        val merged = TWiLightIdentityResolutionRunner.mergeEvidence(listOf(runtime, local), listOf(local))
 
         val resolution = resolve(
             candidate("TEST", "1234"),
             identityIndex("TEST" to "39FC5058"),
-            listOf(runtime, local),
+            merged,
         )
 
         assertEquals(ResolvedRuntimeIdentityStatus.RESOLVED, resolution.runtimeIdentityStatus)
         assertEquals(IdentityEvidenceStatus.EXACT_EVIDENCE, resolution.evidenceStatus)
+        assertEquals(2, merged.size)
         assertEquals(2, resolution.evidence.size)
     }
 
@@ -183,8 +189,9 @@ class LocalRomIdentityScannerTest {
         writeRom(root.resolve("exact.nds"), syntheticHeader("TEST", 0x1234))
         val local = LocalRomIdentityScanner.scan(root).evidenceRecords.single()
         val runtime = local.copy(
+            id = "runtime-observed-fixture",
             type = IdentityEvidenceType.RUNTIME_OBSERVED,
-            sourceRef = "runtime-fixture",
+            sourceRef = "runtime-validation:fixture",
             headerChecksum32 = "11111111",
         )
 
@@ -224,11 +231,12 @@ class LocalRomIdentityScannerTest {
     fun absentLocalModeKeepsTheExactV1EvidenceAndArtifactBytes() {
         val runtimeEvidence = listOf(
             IdentityEvidenceRecord(
+                id = "runtime-observed-fixture",
                 type = IdentityEvidenceType.RUNTIME_OBSERVED,
-                sourceRef = "fixture",
                 gameCode = "TEST",
                 upstreamHeaderCrc16 = "1234",
                 headerChecksum32 = "39FC5058",
+                sourceRef = "runtime-validation:fixture",
             ),
         )
         val merged = TWiLightIdentityResolutionRunner.mergeEvidence(runtimeEvidence, null)

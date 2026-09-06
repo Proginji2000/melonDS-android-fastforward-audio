@@ -166,29 +166,30 @@ class TWiLightIdentityResolverTest {
     }
 
     @Test
-    fun productionManifestEvidenceAndEncodedArtifactsAreDeterministic() {
-        val sourcesPath = repositoryFile("widescreen/widescreen_sources.json")
-        val profilesPath = repositoryFile("widescreen/widescreen_profiles.json")
-        val evidence = TWiLightIdentityResolver.runtimeObservedEvidence(
-            String(Files.readAllBytes(sourcesPath), UTF_8),
-            String(Files.readAllBytes(profilesPath), UTF_8),
-        )
-        val pokemonEvidence = evidence.single { it.gameCode == "IRAF" && it.upstreamHeaderCrc16 == "BC1D" }
-        assertEquals(IdentityEvidenceType.RUNTIME_OBSERVED, pokemonEvidence.type)
-        assertEquals("031EF208", pokemonEvidence.headerChecksum32)
+    fun canonicalManifestEvidenceAndEncodedArtifactsAreDeterministic() {
+        val evidence = canonicalEvidence()
+        val pokemonEvidence = evidence.filter { it.gameCode == "IRAF" && it.upstreamHeaderCrc16 == "BC1D" }
+        val superMarioEvidence = evidence.filter { it.gameCode == "ASMP" && it.upstreamHeaderCrc16 == "477C" }
+        assertEquals(22, evidence.size)
+        assertEquals(21, evidence.count { it.type == IdentityEvidenceType.LOCAL_ROM_HEADER })
+        assertEquals(1, evidence.count { it.type == IdentityEvidenceType.RUNTIME_OBSERVED })
+        assertEquals(2, pokemonEvidence.size)
+        assertEquals(setOf("031EF208"), pokemonEvidence.map { it.headerChecksum32 }.toSet())
+        assertEquals(listOf(IdentityEvidenceType.LOCAL_ROM_HEADER), superMarioEvidence.map { it.type })
+        assertEquals(listOf("D3D9F14A"), superMarioEvidence.map { it.headerChecksum32 })
 
         val candidatesDocument = TWiLightWidescreenCandidatesDocument(
             source = TWiLightWidescreenSource(),
             candidates = listOf(candidate("IRAF-BC1D.bin", "IRAF", "BC1D")),
         )
         val index = identityIndex("IRAF" to "031EF208")
-        val resolutions = resolve(candidatesDocument.candidates, index, listOf(pokemonEvidence))
+        val resolutions = resolve(candidatesDocument.candidates, index, pokemonEvidence)
         val artifact = IdentityArtifactReference("usrcheat.dat", USRCHEAT_ARTIFACT_PATH, 123, "0".repeat(64))
         val inputs = listOf(artifact)
         val first = TWiLightIdentityResolver.encodeArtifacts(
             index,
             candidatesDocument,
-            listOf(pokemonEvidence),
+            pokemonEvidence,
             resolutions,
             UsrcheatSource(),
             artifact,
@@ -197,7 +198,7 @@ class TWiLightIdentityResolverTest {
         val second = TWiLightIdentityResolver.encodeArtifacts(
             index,
             candidatesDocument,
-            listOf(pokemonEvidence),
+            pokemonEvidence,
             resolutions,
             UsrcheatSource(),
             artifact,
@@ -207,6 +208,34 @@ class TWiLightIdentityResolverTest {
         assertArrayEquals(first.usrcheatIdentitiesBytes, second.usrcheatIdentitiesBytes)
         assertArrayEquals(first.resolutionBytes, second.resolutionBytes)
         assertArrayEquals(first.summaryBytes, second.summaryBytes)
+    }
+
+    @Test
+    fun canonicalManifestResolvesTwentyOneMappingsWithoutLocalEvidence() {
+        val evidence = canonicalEvidence()
+        val mappings = evidence.distinctBy { it.gameCode to it.upstreamHeaderCrc16 }
+        val partiallySupported = setOf("AY9P", "IPGF", "IPKF", "YV5P", "YVIP")
+        val candidates = mappings.map { record ->
+            candidate(
+                "${record.gameCode}-${record.upstreamHeaderCrc16}.bin",
+                record.gameCode,
+                record.upstreamHeaderCrc16,
+                if (record.gameCode in partiallySupported) "PARTIALLY_SUPPORTED" else "SUPPORTED",
+            )
+        }
+        val index = identityIndex(*mappings.map { it.gameCode to it.headerChecksum32 }.toTypedArray())
+        val resolutions = resolve(candidates, index, evidence)
+        val resolutionsByPath = resolutions.associateBy { it.sourceCandidatePath }
+
+        assertEquals(21, mappings.size)
+        assertTrue(resolutions.all { it.runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED })
+        assertEquals(
+            16,
+            candidates.count {
+                it.arValidationStatus == "SUPPORTED" &&
+                    resolutionsByPath.getValue(it.sourcePath).runtimeIdentityStatus == ResolvedRuntimeIdentityStatus.RESOLVED
+            },
+        )
     }
 
     private fun resolve(
@@ -223,14 +252,20 @@ class TWiLightIdentityResolverTest {
         checksum32: String,
         source: String = "fixture",
     ) = IdentityEvidenceRecord(
+        id = "runtime-observed-$source",
         type = IdentityEvidenceType.RUNTIME_OBSERVED,
-        sourceRef = source,
         gameCode = gameCode,
         upstreamHeaderCrc16 = crc16,
         headerChecksum32 = checksum32,
+        sourceRef = "runtime-validation:$source",
     )
 
-    private fun candidate(filename: String, gameCode: String, crc16: String) =
+    private fun candidate(
+        filename: String,
+        gameCode: String,
+        crc16: String,
+        validationStatus: String = "SUPPORTED",
+    ) =
         TWiLightWidescreenCandidate(
             sourceRef = "fixture",
             sourcePath = filename,
@@ -247,7 +282,7 @@ class TWiLightIdentityResolverTest {
             decodeDiagnostics = emptyList(),
             actionReplayLines = listOf("D2000000 00000000"),
             canonicalArBinarySha256 = "0".repeat(64),
-            arValidationStatus = "SUPPORTED",
+            arValidationStatus = validationStatus,
             usedOpcodes = listOf("D2"),
             arDiagnostics = emptyList(),
             instructionCount = 1,
@@ -312,5 +347,12 @@ class TWiLightIdentityResolverTest {
         return listOf(Path.of(relativeToApp), Path.of("app").resolve(relativeToApp))
             .firstOrNull(Files::isRegularFile)
             ?: error("Cannot locate repository file $relativeToApp")
+    }
+
+    private fun canonicalEvidence(): List<IdentityEvidenceRecord> {
+        val evidencePath = repositoryFile("widescreen/widescreen_identity_evidence.json")
+        return WidescreenIdentityEvidenceValidator.parseAndValidate(
+            String(Files.readAllBytes(evidencePath), UTF_8),
+        ).records
     }
 }

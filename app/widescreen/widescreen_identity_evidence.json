@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "algorithms": {
+    "upstreamHeaderCrc16": "TWILIGHT_WIDESCREEN_STORED_HEADER_CRC16_V1",
+    "headerChecksum32": "GAMECODE_PLUS_USRCHEAT_HEADER_CHECKSUM_V1"
+  },
+  "records": [
+    {
+      "id": "local-rom-header-adaf-9c75-f23beadc",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "ADAF",
+      "upstreamHeaderCrc16": "9C75",
+      "headerChecksum32": "F23BEADC",
+      "sourceRef": "local-rom-header:ADAF:9C75:F23BEADC"
+    },
+    {
+      "id": "local-rom-header-ajrp-422f-a37ff7d0",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "AJRP",
+      "upstreamHeaderCrc16": "422F",
+      "headerChecksum32": "A37FF7D0",
+      "sourceRef": "local-rom-header:AJRP:422F:A37FF7D0"
+    },
+    {
+      "id": "local-rom-header-apaf-e127-c89a40b6",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "APAF",
+      "upstreamHeaderCrc16": "E127",
+      "headerChecksum32": "C89A40B6",
+      "sourceRef": "local-rom-header:APAF:E127:C89A40B6"
+    },
+    {
+      "id": "local-rom-header-asmp-477c-d3d9f14a",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "ASMP",
+      "upstreamHeaderCrc16": "477C",
+      "headerChecksum32": "D3D9F14A",
+      "sourceRef": "local-rom-header:ASMP:477C:D3D9F14A"
+    },
+    {
+      "id": "local-rom-header-ay9p-fca9-dbffab14",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "AY9P",
+      "upstreamHeaderCrc16": "FCA9",
+      "headerChecksum32": "DBFFAB14",
+      "sourceRef": "local-rom-header:AY9P:FCA9:DBFFAB14"
+    },
+    {
+      "id": "local-rom-header-cjrp-8fd5-2e608754",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "CJRP",
+      "upstreamHeaderCrc16": "8FD5",
+      "headerChecksum32": "2E608754",
+      "sourceRef": "local-rom-header:CJRP:8FD5:2E608754"
+    },
+    {
+      "id": "local-rom-header-cpuf-77cc-d8380d9f",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "CPUF",
+      "upstreamHeaderCrc16": "77CC",
+      "headerChecksum32": "D8380D9F",
+      "sourceRef": "local-rom-header:CPUF:77CC:D8380D9F"
+    },
+    {
+      "id": "local-rom-header-ipgf-4d6a-e1041645",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IPGF",
+      "upstreamHeaderCrc16": "4D6A",
+      "headerChecksum32": "E1041645",
+      "sourceRef": "local-rom-header:IPGF:4D6A:E1041645"
+    },
+    {
+      "id": "local-rom-header-ipkf-4291-f16a1f7b",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IPKF",
+      "upstreamHeaderCrc16": "4291",
+      "headerChecksum32": "F16A1F7B",
+      "sourceRef": "local-rom-header:IPKF:4291:F16A1F7B"
+    },
+    {
+      "id": "local-rom-header-iraf-bc1d-031ef208",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRAF",
+      "upstreamHeaderCrc16": "BC1D",
+      "headerChecksum32": "031EF208",
+      "sourceRef": "local-rom-header:IRAF:BC1D:031EF208"
+    },
+    {
+      "id": "runtime-observed-pokemon-white-fra-v1-0",
+      "type": "RUNTIME_OBSERVED",
+      "gameCode": "IRAF",
+      "upstreamHeaderCrc16": "BC1D",
+      "headerChecksum32": "031EF208",
+      "sourceRef": "runtime-validation:pokemon-white-fra-v1-0"
+    },
+    {
+      "id": "local-rom-header-irao-f6bf-0f0875fe",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRAO",
+      "upstreamHeaderCrc16": "F6BF",
+      "headerChecksum32": "0F0875FE",
+      "sourceRef": "local-rom-header:IRAO:F6BF:0F0875FE"
+    },
+    {
+      "id": "local-rom-header-irbf-09e4-ba565122",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRBF",
+      "upstreamHeaderCrc16": "09E4",
+      "headerChecksum32": "BA565122",
+      "sourceRef": "local-rom-header:IRBF:09E4:BA565122"
+    },
+    {
+      "id": "local-rom-header-irbo-8485-106820a5",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRBO",
+      "upstreamHeaderCrc16": "8485",
+      "headerChecksum32": "106820A5",
+      "sourceRef": "local-rom-header:IRBO:8485:106820A5"
+    },
+    {
+      "id": "local-rom-header-irdf-234d-6c54d079",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRDF",
+      "upstreamHeaderCrc16": "234D",
+      "headerChecksum32": "6C54D079",
+      "sourceRef": "local-rom-header:IRDF:234D:6C54D079"
+    },
+    {
+      "id": "local-rom-header-irdo-d75c-012af769",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IRDO",
+      "upstreamHeaderCrc16": "D75C",
+      "headerChecksum32": "012AF769",
+      "sourceRef": "local-rom-header:IRDO:D75C:012AF769"
+    },
+    {
+      "id": "local-rom-header-iref-5a30-66465e3d",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IREF",
+      "upstreamHeaderCrc16": "5A30",
+      "headerChecksum32": "66465E3D",
+      "sourceRef": "local-rom-header:IREF:5A30:66465E3D"
+    },
+    {
+      "id": "local-rom-header-ireo-7680-8e4c1cd6",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "IREO",
+      "upstreamHeaderCrc16": "7680",
+      "headerChecksum32": "8E4C1CD6",
+      "sourceRef": "local-rom-header:IREO:7680:8E4C1CD6"
+    },
+    {
+      "id": "local-rom-header-ydqp-f9cc-ae7bd3f6",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "YDQP",
+      "upstreamHeaderCrc16": "F9CC",
+      "headerChecksum32": "AE7BD3F6",
+      "sourceRef": "local-rom-header:YDQP:F9CC:AE7BD3F6"
+    },
+    {
+      "id": "local-rom-header-yivp-a6ed-8f926566",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "YIVP",
+      "upstreamHeaderCrc16": "A6ED",
+      "headerChecksum32": "8F926566",
+      "sourceRef": "local-rom-header:YIVP:A6ED:8F926566"
+    },
+    {
+      "id": "local-rom-header-yv5p-8e5e-9d159278",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "YV5P",
+      "upstreamHeaderCrc16": "8E5E",
+      "headerChecksum32": "9D159278",
+      "sourceRef": "local-rom-header:YV5P:8E5E:9D159278"
+    },
+    {
+      "id": "local-rom-header-yvip-11dd-d7ef3686",
+      "type": "LOCAL_ROM_HEADER",
+      "gameCode": "YVIP",
+      "upstreamHeaderCrc16": "11DD",
+      "headerChecksum32": "D7EF3686",
+      "sourceRef": "local-rom-header:YVIP:11DD:D7EF3686"
+    }
+  ]
+}
