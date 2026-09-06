@@ -23,6 +23,19 @@ val twilightCheckout = providers.gradleProperty("twilightCheckout")
 val twilightOutput = providers.gradleProperty("twilightOutput")
     .map(rootProject::file)
     .orElse(rootProject.layout.buildDirectory.dir("widescreen-quarantine").map { it.asFile })
+val usrcheatArtifact = providers.gradleProperty("usrcheatArtifact")
+    .map(rootProject::file)
+    .orElse(
+        rootProject.layout.buildDirectory
+            .file("widescreen-identity-upstream/NDS-Cheat-Databases/Cheat Databases/usrcheat.dat")
+            .map { it.asFile },
+    )
+val twilightCandidates = providers.gradleProperty("twilightCandidates")
+    .map(rootProject::file)
+    .orElse(rootProject.layout.buildDirectory.file("widescreen-quarantine/twilight-widescreen-candidates.json").map { it.asFile })
+val identityOutput = providers.gradleProperty("identityOutput")
+    .map(rootProject::file)
+    .orElse(rootProject.layout.buildDirectory.dir("widescreen-identity-resolution").map { it.asFile })
 
 tasks.register<JavaExec>("importTWiLightWidescreenCandidates") {
     group = "widescreen maintenance"
@@ -35,5 +48,32 @@ tasks.register<JavaExec>("importTWiLightWidescreenCandidates") {
     outputs.file(twilightOutput.map { it.resolve("twilight-widescreen-summary.json") })
     doFirst {
         setArgs(listOf(twilightCheckout.get().absolutePath, twilightOutput.get().absolutePath))
+    }
+}
+
+tasks.register<JavaExec>("resolveTWiLightWidescreenIdentities") {
+    group = "widescreen maintenance"
+    description = "Joins quarantined TWiLight identities with a pinned local usrcheat index"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("me.magnum.melonds.domain.widescreen.TWiLightIdentityResolverMain")
+    inputs.file(usrcheatArtifact).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(twilightCandidates).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file("app/widescreen/widescreen_sources.json"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file("app/widescreen/widescreen_profiles.json"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(identityOutput.map { it.resolve("usrcheat-identities.json") })
+    outputs.file(identityOutput.map { it.resolve("twilight-identity-resolution.json") })
+    outputs.file(identityOutput.map { it.resolve("twilight-identity-summary.json") })
+    doFirst {
+        setArgs(
+            listOf(
+                usrcheatArtifact.get().absolutePath,
+                twilightCandidates.get().absolutePath,
+                rootProject.file("app/widescreen/widescreen_sources.json").absolutePath,
+                rootProject.file("app/widescreen/widescreen_profiles.json").absolutePath,
+                identityOutput.get().absolutePath,
+            ),
+        )
     }
 }
